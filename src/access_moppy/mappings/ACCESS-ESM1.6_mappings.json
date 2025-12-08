@@ -252,8 +252,8 @@
             "CF standard Name": "specific_humidity",
             "dimensions": {
                 "time": "time",
-                "lat": "lat",
-                "lon": "lon"
+                "lat_v": "lat",
+                "lon_u": "lon"
             },
             "units": "1",
             "positive": null,
@@ -2025,8 +2025,8 @@
         "ficeberg2d": {
             "dimensions": {
                 "time": "time",
-                "yt_ocean": "latitude",
-                "xt_ocean": "longitude"
+                "yh": "latitude",
+                "xh": "longitude"
             },
             "units": "kg m-2 s-1",
             "positive": null,
@@ -2042,8 +2042,8 @@
         "friver": {
             "dimensions": {
                 "time": "time",
-                "yt_ocean": "latitude",
-                "xt_ocean": "longitude"
+                "yh": "latitude",
+                "xh": "longitude"
             },
             "units": "kg m-2 s-1",
             "positive": null,
@@ -2056,28 +2056,11 @@
             },
             "CF standard Name": ""
         },
-        "fsitherm": {
-            "dimensions": {
-                "time": "time",
-                "yt_ocean": "latitude",
-                "xt_ocean": "longitude"
-            },
-            "units": "kg m-2 s-1",
-            "positive": null,
-            "model_variables": [
-                "melt"
-            ],
-            "calculation": {
-                "type": "direct",
-                "formula": "melt"
-            },
-            "CF standard Name": ""
-        },
         "hfds": {
             "dimensions": {
                 "time": "time",
-                "yt_ocean": "latitude",
-                "xt_ocean": "longitude"
+                "yh": "latitude",
+                "xh": "longitude"
             },
             "units": "W m-2",
             "positive": null,
@@ -2099,8 +2082,8 @@
         "hfevapds": {
             "dimensions": {
                 "time": "time",
-                "yt_ocean": "latitude",
-                "xt_ocean": "longitude"
+                "yh": "latitude",
+                "xh": "longitude"
             },
             "units": "W m-2",
             "positive": null,
@@ -2116,8 +2099,8 @@
         "hfibthermds2d": {
             "dimensions": {
                 "time": "time",
-                "yt_ocean": "latitude",
-                "xt_ocean": "longitude"
+                "yh": "latitude",
+                "xh": "longitude"
             },
             "units": "W m-2",
             "positive": null,
@@ -2133,8 +2116,8 @@
         "hflso": {
             "dimensions": {
                 "time": "time",
-                "yt_ocean": "latitude",
-                "xt_ocean": "longitude"
+                "yh": "latitude",
+                "xh": "longitude"
             },
             "units": "W m-2",
             "positive": null,
@@ -2150,8 +2133,8 @@
         "hfrainds": {
             "dimensions": {
                 "time": "time",
-                "yt_ocean": "latitude",
-                "xt_ocean": "longitude"
+                "yh": "latitude",
+                "xh": "longitude"
             },
             "units": "W m-2",
             "positive": null,
@@ -2167,8 +2150,8 @@
         "hfrunoffds2d": {
             "dimensions": {
                 "time": "time",
-                "yt_ocean": "latitude",
-                "xt_ocean": "longitude"
+                "yh": "latitude",
+                "xh": "longitude"
             },
             "units": "W m-2",
             "positive": null,
@@ -2226,8 +2209,8 @@
         "hfsnthermds2d": {
             "dimensions": {
                 "time": "time",
-                "yt_ocean": "latitude",
-                "xt_ocean": "longitude"
+                "yh": "latitude",
+                "xh": "longitude"
             },
             "units": "W m-2",
             "positive": null,
@@ -2243,8 +2226,8 @@
         "hfsso": {
             "dimensions": {
                 "time": "time",
-                "yt_ocean": "latitude",
-                "xt_ocean": "longitude"
+                "yh": "latitude",
+                "xh": "longitude"
             },
             "units": "W m-2",
             "positive": null,
@@ -2278,8 +2261,8 @@
         "mlotst": {
             "dimensions": {
                 "time": "time",
-                "yt_ocean": "latitude",
-                "xt_ocean": "longitude"
+                "yh": "latitude",
+                "xh": "longitude"
             },
             "units": "m",
             "positive": null,
@@ -2295,8 +2278,8 @@
         "mlotstsq": {
             "dimensions": {
                 "time": "time",
-                "yt_ocean": "latitude",
-                "xt_ocean": "longitude"
+                "yh": "latitude",
+                "xh": "longitude"
             },
             "units": "m2",
             "positive": null,
@@ -2334,8 +2317,8 @@
         "pbo": {
             "dimensions": {
                 "time": "time",
-                "yt_ocean": "latitude",
-                "xt_ocean": "longitude"
+                "yh": "latitude",
+                "xh": "longitude"
             },
             "units": "dbar",
             "positive": null,
@@ -2352,28 +2335,11 @@
             },
             "CF standard Name": ""
         },
-        "prra": {
-            "dimensions": {
-                "time": "time",
-                "yt_ocean": "latitude",
-                "xt_ocean": "longitude"
-            },
-            "units": "kg m-2 s-1",
-            "positive": null,
-            "model_variables": [
-                "lprec"
-            ],
-            "calculation": {
-                "type": "direct",
-                "formula": "lprec"
-            },
-            "CF standard Name": ""
-        },
         "pso": {
             "dimensions": {
                 "time": "time",
-                "yt_ocean": "latitude",
-                "xt_ocean": "longitude"
+                "yh": "latitude",
+                "xh": "longitude"
             },
             "units": "Pa",
             "positive": null,
@@ -2389,8 +2355,8 @@
         "rlntds": {
             "dimensions": {
                 "time": "time",
-                "yt_ocean": "latitude",
-                "xt_ocean": "longitude"
+                "yh": "latitude",
+                "xh": "longitude"
             },
             "units": "W m-2",
             "positive": null,
@@ -2424,8 +2390,8 @@
         "rsntds": {
             "dimensions": {
                 "time": "time",
-                "yt_ocean": "latitude",
-                "xt_ocean": "longitude"
+                "yh": "latitude",
+                "xh": "longitude"
             },
             "units": "W m-2",
             "positive": null,
@@ -2438,28 +2404,11 @@
             },
             "CF standard Name": ""
         },
-        "sfdsi": {
+        "sfriver": {
             "dimensions": {
                 "time": "time",
                 "yh": "latitude",
                 "xh": "longitude"
-            },
-            "units": "kg m-2 s-1",
-            "positive": null,
-            "model_variables": [
-                "sfc_salt_flux_ice"
-            ],
-            "calculation": {
-                "type": "direct",
-                "formula": "sfc_salt_flux_ice"
-            },
-            "CF standard Name": ""
-        },
-        "sfriver": {
-            "dimensions": {
-                "time": "time",
-                "yt_ocean": "latitude",
-                "xt_ocean": "longitude"
             },
             "units": "kg m-2 s-1",
             "positive": null,
@@ -2475,8 +2424,8 @@
         "sob": {
             "dimensions": {
                 "time": "time",
-                "yt_ocean": "latitude",
-                "xt_ocean": "longitude"
+                "yh": "latitude",
+                "xh": "longitude"
             },
             "units": "psu",
             "positive": null,
@@ -2510,8 +2459,8 @@
         "sos": {
             "dimensions": {
                 "time": "time",
-                "yt_ocean": "latitude",
-                "xt_ocean": "longitude"
+                "yh": "latitude",
+                "xh": "longitude"
             },
             "units": "psu",
             "positive": null,
@@ -2658,8 +2607,8 @@
         "wfo": {
             "dimensions": {
                 "time": "time",
-                "yt_ocean": "latitude",
-                "xt_ocean": "longitude"
+                "yh": "latitude",
+                "xh": "longitude"
             },
             "units": "kg m-2 s-1",
             "positive": null,
@@ -2728,8 +2677,8 @@
         "zossq": {
             "dimensions": {
                 "time": "time",
-                "yt_ocean": "latitude",
-                "xt_ocean": "longitude"
+                "yh": "latitude",
+                "xh": "longitude"
             },
             "units": "m2",
             "positive": null,
