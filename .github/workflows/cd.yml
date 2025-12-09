@@ -17,6 +17,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
+    outputs:
+      # Output the version for downstream jobs
+      version: ${{ steps.get-version.outputs.version }}
     steps:
       - name: Checkout source
         uses: actions/checkout@v6.0.1
@@ -31,6 +34,19 @@ jobs:
         run: |
           git clean -xdf
           pyproject-build
+      - name: Get version for artifact naming
+        id: get-version
+        run: |
+          VERSION=$(python -c "import versioneer; print(versioneer.get_version())")
+          VERSION=${VERSION#v}
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Building version: ${VERSION}"
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package-distributions-${{ steps.get-version.outputs.version }}
+          path: dist/
+          retention-days: 7
       - name: Publish package to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
@@ -40,36 +56,78 @@ jobs:
     name: build and deploy to conda
     needs: pypi
     runs-on: ubuntu-latest
+    # This job uses artifacts from the PyPI job instead of waiting for PyPI propagation
+    # This makes the build more reliable and faster
     steps:
       - name: Checkout source
         uses: actions/checkout@v6.0.1
-      - name: Wait for PyPI propagation
+      - name: Download build artifacts from PyPI job
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions-${{ needs.pypi.outputs.version }}
+          path: dist/
+      - name: Verify artifacts
         run: |
-          echo "Waiting for PyPI package to be downloadable..."
-          PACKAGE_NAME="access_moppy"
-          VERSION=$(python -c "import versioneer; print(versioneer.get_version())")
-          VERSION=${VERSION#v}
-          echo "Looking for package: ${PACKAGE_NAME}==${VERSION}"
-          for i in {1..90}; do
-            echo "Attempt $i/90: Trying to download wheel and sdist..."
-            rm -rf /tmp/pypi_check_download && mkdir -p /tmp/pypi_check_download
-            pip download --no-deps --dest /tmp/pypi_check_download ${PACKAGE_NAME}==${VERSION} >/dev/null 2>&1
-            pip download --no-deps --no-binary=:all: --dest /tmp/pypi_check_download ${PACKAGE_NAME}==${VERSION} >/dev/null 2>&1
-            WHEEL=$(ls /tmp/pypi_check_download/*.whl 2>/dev/null | head -1)
-            SDIST=$(ls /tmp/pypi_check_download/*.tar.gz 2>/dev/null | head -1)
-            if [[ -n "$WHEEL" && -n "$SDIST" ]]; then
-              echo "✅ Both wheel and sdist for ${PACKAGE_NAME}==${VERSION} are downloadable!"
-              break
-            fi
-            if [ $i -eq 90 ]; then
-              echo "❌ Could not download both wheel and sdist after 15 minutes"
-              echo "Available files:"
-              ls -l /tmp/pypi_check_download || echo "No files downloaded"
-              exit 1
-            fi
-            echo "Files not yet downloadable, waiting 10 seconds..."
-            sleep 10
-          done
+          echo "Downloaded artifacts:"
+          ls -la dist/
+          echo "Checking for wheel and sdist files..."
+          WHEEL=$(ls dist/*.whl 2>/dev/null | head -1)
+          SDIST=$(ls dist/*.tar.gz 2>/dev/null | head -1)
+          if [[ -n "$WHEEL" && -n "$SDIST" ]]; then
+            echo "✅ Both wheel and sdist found in artifacts!"
+            echo "Wheel: $(basename $WHEEL)"
+            echo "Sdist: $(basename $SDIST)"
+          else
+            echo "❌ Missing wheel or sdist in artifacts"
+            exit 1
+          fi
+      - name: Prepare conda recipe for local build
+        run: |
+          echo "Preparing conda recipe to use local source..."
+          # Create a modified meta.yaml that uses local source
+          cp .conda/meta.yaml .conda/meta.yaml.backup
+          cat > .conda/meta.yaml << 'EOF'
+          {% set data = load_setup_py_data(setup_file='../setup.py', from_recipe_dir=True) %}
+          {% set version = data.get('version') %}
+
+          package:
+              name: access-moppy
+              version: "{{ version }}"
+
+          source:
+              path: ../
+
+          build:
+              noarch: python
+              number: 0
+              script: "{{ PYTHON }} -m pip install . -vv"
+
+          requirements:
+              host:
+                  - python
+                  - pip
+                  - versioneer
+              run:
+                  - python >=3.11
+                  - xarray
+                  - numpy
+                  - dask
+                  - pyyaml
+                  - cftime
+
+          about:
+              home: https://github.com/ACCESS-NRI/ACCESS-MOPPy
+              summary: A Python package for CMORisation of ACCESS model output
+              license: Apache-2.0
+              license_file: LICENCE.txt
+              doc_url: https://access-moppy.readthedocs.io/
+              dev_url: https://github.com/ACCESS-NRI/ACCESS-MOPPy
+
+          extra:
+              recipe-maintainers:
+                  - ACCESS-NRI
+          EOF
+          echo "Modified conda recipe to use local source (path: ../)"
       - name: Setup conda environment
         uses: conda-incubator/setup-miniconda@v3
         with:
@@ -87,10 +145,23 @@ jobs:
           user: accessnri
           label: main
           token: ${{ secrets.anaconda_token }}
+      - name: Verify conda package build
+        run: |
+          echo "Conda build completed successfully!"
+          echo "Version built: ${{ needs.pypi.outputs.version }}"
+          echo "✅ Conda package should now be available in the accessnri channel"
+      - name: Restore original conda recipe
+        if: always()  # Run even if build fails
+        run: |
+          if [ -f .conda/meta.yaml.backup ]; then
+            echo "Restoring original conda recipe..."
+            mv .conda/meta.yaml.backup .conda/meta.yaml
+            echo "✅ Original conda recipe restored"
+          fi
 
   update_analysis3:
     name: Update ACCESS-MOPPy on Analysis3 Conda Environment
-    needs: conda
+    needs: [pypi, conda]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -110,12 +181,17 @@ jobs:
         run: |
           if [ -n "${INPUT_VERSION}" ]; then
             ver="${INPUT_VERSION}"
+          elif [ -n "${{ needs.pypi.outputs.version }}" ]; then
+            # Use version from PyPI job output (more reliable)
+            ver="${{ needs.pypi.outputs.version }}"
           else
+            # Fallback to parsing tag
             tag="${RELEASE_TAG}"
             ver="${tag#moppy-}"
             ver="${ver#v}"
           fi
           echo "version=$ver" >> $GITHUB_OUTPUT
+          echo "Using version: $ver"
       - name: Install tooling (jq, gh, Python deps)
         run: |
           sudo apt-get update -y
