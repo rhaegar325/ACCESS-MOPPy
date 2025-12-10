@@ -1,0 +1,3 @@
+[submodule "src/access_moppy/vocabularies/cmip7-cmor-tables"]
+	path = src/access_moppy/vocabularies/cmip7-cmor-tables
+	url = git@github.com:WCRP-CMIP/cmip7-cmor-tables.git
