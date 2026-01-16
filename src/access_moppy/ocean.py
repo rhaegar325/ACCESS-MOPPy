@@ -247,7 +247,7 @@ class CMIP6_Ocean_CMORiser_OM2(CMIP6_Ocean_CMORiser):
 
     def _get_dim_rename(self):
         """Get the dimension renaming mapping for the grid type."""
-        if "ACCESS-OM2" in self.vocab.source_id:
+        if "ACCESS-OM2" in self.vocab.source_id or "ACCESS-CM" in self.vocab.source_id:
             return {
                 "xt_ocean": "i",
                 "yt_ocean": "j",
@@ -312,7 +312,7 @@ class CMIP6_Ocean_CMORiser_OM3(CMIP6_Ocean_CMORiser):
 
     def _get_dim_rename(self):
         """Get the dimension renaming mapping for the grid type."""
-        if "ACCESS-OM3" in self.vocab.source_id:
+        if "ACCESS-OM3" in self.vocab.source_id or "ACCESS-CM" in self.vocab.source_id:
             return {
                 "xh": "i",
                 "yh": "j",
