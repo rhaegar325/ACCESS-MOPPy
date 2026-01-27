@@ -1,6 +1,7 @@
 import operator
 from functools import reduce
 
+from access_moppy.derivations.calc_aerosol import optical_depth
 from access_moppy.derivations.calc_atmos import level_to_height
 from access_moppy.derivations.calc_land import (
     average_tile,
@@ -19,11 +20,13 @@ custom_functions = {
     "mean": lambda *args: sum(args) / len(args),
     "kelvin_to_celsius": lambda x: x - 273.15,
     "celsius_to_kelvin": lambda x: x + 273.15,
+    "isel": lambda x, **kwargs: x.isel(**kwargs),
     "level_to_height": level_to_height,
     "calc_topsoil": calc_topsoil,
     "calc_landcover": calc_landcover,
     "extract_tilefrac": extract_tilefrac,
     "average_tile": average_tile,
+    "optical_depth": optical_depth,
 }
 
 
