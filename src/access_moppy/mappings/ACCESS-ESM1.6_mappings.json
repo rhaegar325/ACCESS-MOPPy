@@ -149,45 +149,59 @@
             }
         },
         "cl": {
-            "CF standard Name": "cloud_area_fraction_in atmosphere_layer",
+            "CF standard Name": "cloud_area_fraction_in_atmosphere_layer",
             "dimensions": {
                 "time": "time",
-                "alevel": "model_theta_level_number",
+                "theta_level_height": "lev",
                 "lat": "lat",
                 "lon": "lon"
             },
-            "units": "1",
+            "units": "kg kg-1",
             "positive": null,
             "model_variables": [
                 "fld_s02i261"
             ],
+            "zaxis": {
+                "type": "hybrid_height",
+                "coordinate_variables": {
+                    "sigma_theta": "b",
+                    "surface_altitude": "orog",
+                    "theta_level_height": "lev"
+                },
+            "formula": "z = a + b*orog"
+            },
             "calculation": {
-                "type": "formula",
-                "operation": "level_to_height",
-                "operands": [
-                    "fld_s02i261"
-                ]
+                "type": "dataset_function",
+                "function": "cl_level_to_height",
+                "kwargs": {}
             }
         },
         "cli": {
             "CF standard Name": "mass_fraction_of_cloud_ice_in_air",
             "dimensions": {
                 "time": "time",
-                "alevel": "model_theta_level_number",
+                "theta_level_height": "lev",
                 "lat": "lat",
                 "lon": "lon"
             },
-            "units": "1",
+            "units": "kg kg-1",
             "positive": null,
             "model_variables": [
                 "fld_s02i309"
             ],
+            "zaxis": {
+                "type": "hybrid_height",
+                "coordinate_variables": {
+                    "sigma_theta": "b",
+                    "surface_altitude": "orog",
+                    "theta_level_height": "lev"
+                },
+                "formula": "z = a + b*orog"
+            },
             "calculation": {
-                "type": "formula",
-                "operation": "level_to_height",
-                "operands": [
-                    "fld_s02i309"
-                ]
+                "type": "dataset_function",
+                "function": "cli_level_to_height",
+                "kwargs": {}
             }
         },
         "clivi": {
@@ -232,21 +246,28 @@
             "CF standard Name": "mass_fraction_of_cloud_liquid_water_in_air",
             "dimensions": {
                 "time": "time",
-                "alevel": "model_theta_level_number",
+                "theta_level_height": "lev",
                 "lat": "lat",
                 "lon": "lon"
             },
-            "units": "1",
+            "units": "kg kg-1",
             "positive": null,
             "model_variables": [
                 "fld_s02i308"
             ],
+            "zaxis": {
+                "type": "hybrid_height",
+                "coordinate_variables": {
+                    "sigma_theta": "b",
+                    "surface_altitude": "orog",
+                    "theta_level_height": "lev"
+                },
+                "formula": "z = a + b*orog"
+            },
             "calculation": {
-                "type": "formula",
-                "operation": "level_to_height",
-                "operands": [
-                    "fld_s02i308"
-                ]
+                "type": "dataset_function",
+                "function": "clw_level_to_height",
+                "kwargs": {}
             }
         },
         "evspsbl": {
@@ -340,8 +361,8 @@
             "CF standard Name": "specific_humidity",
             "dimensions": {
                 "time": "time",
-                "lat_v": "lat",
-                "lon_u": "lon"
+                "lat": "lat",
+                "lon": "lon"
             },
             "units": "1",
             "positive": null,
@@ -885,11 +906,14 @@
             "units": "K",
             "positive": null,
             "model_variables": [
-                "fld_s03i236_max"
+                "fld_s03i236"
             ],
             "calculation": {
-                "type": "direct",
-                "formula": "fld_s03i236_max"
+                "type": "formula",
+                "formula": "calculate_monthly_maximum",
+                "operands": [
+                    "fld_s03i236"
+                ]
             }
         },
         "tasmin": {
@@ -902,11 +926,14 @@
             "units": "K",
             "positive": null,
             "model_variables": [
-                "fld_s03i236_min"
+                "fld_s03i236"
             ],
             "calculation": {
-                "type": "direct",
-                "formula": "fld_s03i236_min"
+                "type": "formula",
+                "formula": "calculate_monthly_minimum",
+                "operands": [
+                    "fld_s03i236"
+                ]
             }
         },
         "tauu": {
@@ -1890,7 +1917,7 @@
                     "fld_s08i223"
                 ],
                 "kwargs": {
-                    "dim": "depth"
+                    "dim": {"literal": "soil_model_level_number"}
                 }
             },
             "CF standard Name": "mass_content_of_water_in_soil"
