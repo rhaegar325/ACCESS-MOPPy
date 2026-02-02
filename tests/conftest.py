@@ -260,19 +260,62 @@ def _filter_variables_by_test_data(variables, table_name):
             "sfcWind",
         ],
         "Lmon": [
-            # For land variables, we need different test data files
-            # For now, return a minimal set for basic testing
-            "mrso",  # Total Soil Moisture Content (if soil data available)
+            "mrso",
+            "mrsos",
+            "cLeaf",
+            "cLitter",
+            "cRoot",
+            "cProduct",
+            "baresoilFrac",
+            "c3PftFrac",
+            "c4PftFrac",
+            "cSoilFast",
+            "cSoilMedium",
+            "cSoilSlow",
+            "cropFrac",
+            "grassFrac",
+            "npp",
+            "nbp",
+            "ra",
+            "rh",
+            "residualFrac",
+            "shrubFrac",
+            "treeFrac",
+            "lai",
         ],
         "Emon": [
-            # Only variables that actually exist in the Emon CMIP6 table
-            # AND are compatible with the test data (aiihca.pa-298810_mon.nc)
-            # From atmosphere component:
-            "hus",  # Specific Humidity
-            "ps",  # Surface Air Pressure
-            "ua",  # Eastward Wind
-            "va",  # Northward Wind
-            # Note: co23D and cSoil exist in Emon but have dimension issues with test data
+            "cLand",
+            "cSoil",
+            "cropFracC3",
+            "fBNF",
+            "fDeforestToProduct",
+            "fNdep",
+            "fNgas",
+            "fNleach",
+            "fNloss",
+            "fNnetmin",
+            "fNup",
+            "fProductDecomp",
+            "grassFracC3",
+            "grassFracC4",
+            "mrsfl",
+            "mrsll",
+            "mrsol",
+            "nep",
+            "nLand",
+            "nLitter",
+            "nMineral",
+            "nProduct",
+            "nSoil",
+            "nVeg",
+            "orog",
+            "treeFracBdlDcd",
+            "treeFracBdlEvg",
+            "treeFracNdlDcd",
+            "treeFracNdlEvg",
+            "vegFrac",
+            "vegHeight",
+            "wetlandFrac",
         ],
     }
 
