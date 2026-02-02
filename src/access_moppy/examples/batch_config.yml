@@ -1,7 +1,7 @@
 # Example configuration for batch CMORisation using PBS
 # Each variable will be processed in a separate PBS job with its own Dask cluster
 
-# Required: List of variables to process
+# Option 1: List individual variables to process
 variables:
   - Amon.pr
   - Omon.tos
@@ -13,6 +13,16 @@ variables:
   - Amon.rlus
   - Amon.rsds
   - Amon.rsus
+
+# Option 2: Specify entire CMIP6 tables to process all supported variables
+# Only variables with model mappings available will be included.
+# Can be used together with 'variables' above; duplicates are removed.
+# tables:
+#   - Amon
+#   - Omon
+
+# Optional: Model ID for looking up variable mappings (defaults to ACCESS-ESM1.6)
+# model_id: ACCESS-ESM1.6
 
 # Required: CMIP6 metadata
 experiment_id: piControl

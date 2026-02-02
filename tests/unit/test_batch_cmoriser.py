@@ -9,7 +9,12 @@ from unittest.mock import Mock, mock_open, patch
 
 import pytest
 
-from access_moppy.batch_cmoriser import create_job_script, submit_job
+from access_moppy.batch_cmoriser import (
+    create_job_script,
+    get_variables_for_table,
+    resolve_variables,
+    submit_job,
+)
 from tests.mocks.mock_pbs import MockPBSManager, mock_qsub_success
 
 
@@ -95,3 +100,103 @@ class TestBatchCmoriser:
             # Verify job is tracked
             assert job_id_key in pbs.submitted_jobs
             assert pbs.submitted_jobs[job_id_key]["status"] == "C"
+
+
+class TestTableExpansion:
+    """Unit tests for table-based variable expansion."""
+
+    @pytest.mark.unit
+    def test_get_variables_for_table_amon(self):
+        """Test expanding the Amon table returns known atmosphere variables."""
+        result = get_variables_for_table("Amon", model_id="ACCESS-ESM1.6")
+        # Should return compound names in the form Amon.<var>
+        assert len(result) > 0
+        assert all(v.startswith("Amon.") for v in result)
+        # Known atmosphere variables that should be in both Amon table and mappings
+        assert "Amon.tas" in result
+        assert "Amon.pr" in result
+        assert "Amon.hfss" in result
+
+    @pytest.mark.unit
+    def test_get_variables_for_table_omon(self):
+        """Test expanding the Omon table returns known ocean variables."""
+        result = get_variables_for_table("Omon", model_id="ACCESS-ESM1.6")
+        assert len(result) > 0
+        assert all(v.startswith("Omon.") for v in result)
+        assert "Omon.tos" in result
+        assert "Omon.so" in result
+
+    @pytest.mark.unit
+    def test_get_variables_for_table_filters_unsupported(self):
+        """Test that variables without model mappings are excluded."""
+        result = get_variables_for_table("Amon", model_id="ACCESS-ESM1.6")
+        var_names = [v.split(".")[1] for v in result]
+        # co2mass is in CMIP6_Amon.json but not in ACCESS-ESM1.6 mappings
+        assert "co2mass" not in var_names
+
+    @pytest.mark.unit
+    def test_get_variables_for_table_sorted(self):
+        """Test that results are sorted alphabetically."""
+        result = get_variables_for_table("Amon", model_id="ACCESS-ESM1.6")
+        assert result == sorted(result)
+
+    @pytest.mark.unit
+    def test_get_variables_for_table_invalid_model(self):
+        """Test that a missing model mapping file raises FileNotFoundError."""
+        with pytest.raises(FileNotFoundError, match="not found"):
+            get_variables_for_table("Amon", model_id="NONEXISTENT-MODEL")
+
+    @pytest.mark.unit
+    def test_resolve_variables_explicit_only(self):
+        """Test resolve_variables with only explicit variables."""
+        config = {"variables": ["Amon.pr", "Omon.tos"]}
+        result = resolve_variables(config)
+        assert result == ["Amon.pr", "Omon.tos"]
+
+    @pytest.mark.unit
+    def test_resolve_variables_tables_only(self):
+        """Test resolve_variables with only tables."""
+        config = {"tables": ["Amon"], "model_id": "ACCESS-ESM1.6"}
+        result = resolve_variables(config)
+        assert len(result) > 0
+        assert all(v.startswith("Amon.") for v in result)
+        assert "Amon.tas" in result
+
+    @pytest.mark.unit
+    def test_resolve_variables_combined(self):
+        """Test resolve_variables with both variables and tables."""
+        config = {
+            "variables": ["Omon.tos"],
+            "tables": ["Amon"],
+            "model_id": "ACCESS-ESM1.6",
+        }
+        result = resolve_variables(config)
+        assert "Omon.tos" in result
+        assert "Amon.tas" in result
+
+    @pytest.mark.unit
+    def test_resolve_variables_deduplicates(self):
+        """Test that duplicates from tables and explicit variables are removed."""
+        config = {
+            "variables": ["Amon.tas", "Amon.pr"],
+            "tables": ["Amon"],
+            "model_id": "ACCESS-ESM1.6",
+        }
+        result = resolve_variables(config)
+        # No duplicates
+        assert len(result) == len(set(result))
+        # Both should still appear
+        assert "Amon.tas" in result
+        assert "Amon.pr" in result
+
+    @pytest.mark.unit
+    def test_resolve_variables_neither_specified(self):
+        """Test that missing both variables and tables raises ValueError."""
+        with pytest.raises(ValueError, match="at least one"):
+            resolve_variables({})
+
+    @pytest.mark.unit
+    def test_resolve_variables_empty_lists(self):
+        """Test that empty variables and tables raises ValueError."""
+        with pytest.raises(ValueError, match="at least one"):
+            resolve_variables({"variables": [], "tables": []})
