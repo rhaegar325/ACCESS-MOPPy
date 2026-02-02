@@ -14,14 +14,22 @@ variables:
   - Amon.rsds
   - Amon.rsus
 
-# Option 2: Specify entire CMIP6 tables to process all supported variables
+# Option 2: Specify entire CMIP6 tables to process all supported variables.
 # Only variables with model mappings available will be included.
 # Can be used together with 'variables' above; duplicates are removed.
+#
+# List form (all tables use the global model_id):
 # tables:
 #   - Amon
 #   - Omon
+#
+# Dict form (per-table model_id override):
+# tables:
+#   Amon: ACCESS-ESM1.6
+#   Omon: ACCESS-OM3
 
-# Optional: Model ID for looking up variable mappings (defaults to ACCESS-ESM1.6)
+# Optional: Global model ID for looking up variable mappings (defaults to ACCESS-ESM1.6).
+# Per-table values in the dict form above take precedence over this.
 # model_id: ACCESS-ESM1.6
 
 # Required: CMIP6 metadata
@@ -63,7 +71,7 @@ walltime: "02:00:00"
 scheduler_options: "#PBS -P tm70"
 storage: "gdata/p73+gdata/tm70+scratch/tm70+gdata/xp65"
 
-# Variable-specific resource overrides
+# Variable-specific resource overrides (also supports per-variable model_id)
 variable_resources:
   # 3D ocean variables need more resources
   Omon.thetao:
@@ -82,6 +90,10 @@ variable_resources:
     cpus_per_node: 8
     mem: 32GB
     walltime: "02:00:00"
+
+  # Per-variable model_id override example
+  # Omon.tos:
+  #   model_id: ACCESS-OM3
 
 # Environment setup for each job
 worker_init: |

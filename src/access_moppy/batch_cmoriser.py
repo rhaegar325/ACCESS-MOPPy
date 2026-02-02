@@ -82,16 +82,36 @@ def get_variables_for_table(table_id, model_id=None):
 def resolve_variables(config_data):
     """Resolve the full list of variables from config, expanding any table entries.
 
-    Supports three config keys:
-      - ``variables``: explicit list of compound names (e.g., ``['Amon.pr', 'Omon.tos']``)
-      - ``tables``: list of CMIP6 table IDs to expand (e.g., ``['Amon', 'Emon']``)
-      - both can be used together; duplicates are removed
+    Supports these config keys:
+
+      - ``variables``: explicit list of compound names
+        (e.g., ``['Amon.pr', 'Omon.tos']``)
+      - ``tables``: CMIP6 table IDs to expand – accepts either a **list** or
+        a **dict** that maps each table to a model_id::
+
+            # list form (uses global model_id)
+            tables:
+              - Amon
+              - Omon
+
+            # dict form (per-table model_id)
+            tables:
+              Amon: ACCESS-ESM1.6
+              Omon: ACCESS-OM3
+
+      - ``model_id``: global default model_id for mapping lookups
+      - both ``variables`` and ``tables`` can be used together; duplicates
+        are removed
 
     Args:
         config_data: Parsed YAML config dictionary.
 
     Returns:
-        Sorted, deduplicated list of compound variable names.
+        A tuple ``(variables, variable_model_map)`` where *variables* is a
+        sorted, deduplicated list of compound variable names and
+        *variable_model_map* is a ``dict[str, str]`` mapping each variable
+        to its effective model_id (only present when a per-table or
+        per-variable override exists).
 
     Raises:
         ValueError: If neither ``variables`` nor ``tables`` is specified.
@@ -104,26 +124,43 @@ def resolve_variables(config_data):
             "Config must specify at least one of 'variables' or 'tables'."
         )
 
-    # Determine model_id for mapping lookup
-    source_id = config_data.get("source_id", "ACCESS-ESM1-5")
-    # Convert source_id format (ACCESS-ESM1-5 -> ACCESS-ESM1.6) for mapping lookup
-    # Model mapping files use dot notation (ACCESS-ESM1.6), not hyphen
-    model_id = config_data.get("model_id", None)
+    global_model_id = config_data.get("model_id", None)
 
     all_variables = set(explicit_variables)
+    # Maps variable -> model_id (only for overrides)
+    variable_model_map = {}
 
-    for table_id in tables:
+    # Normalise tables into [(table_id, model_id_or_None), ...]
+    if isinstance(tables, dict):
+        table_entries = list(tables.items())
+    else:
+        table_entries = [(t, None) for t in tables]
+
+    for table_id, table_model_id in table_entries:
+        effective_model_id = table_model_id or global_model_id
         try:
-            table_vars = get_variables_for_table(table_id, model_id=model_id)
+            table_vars = get_variables_for_table(
+                table_id, model_id=effective_model_id
+            )
             print(
-                f"Table '{table_id}': found {len(table_vars)} supported variables"
+                f"Table '{table_id}' (model={effective_model_id or 'default'}): "
+                f"found {len(table_vars)} supported variables"
             )
             all_variables.update(table_vars)
+            if table_model_id:
+                for var in table_vars:
+                    variable_model_map[var] = table_model_id
         except FileNotFoundError as e:
             print(f"Warning: {e}")
             continue
 
-    return sorted(all_variables)
+    # Apply per-variable model_id from variable_resources
+    variable_resources = config_data.get("variable_resources", {}) or {}
+    for var, res in variable_resources.items():
+        if isinstance(res, dict) and "model_id" in res:
+            variable_model_map[var] = res["model_id"]
+
+    return sorted(all_variables), variable_model_map
 
 
 def start_dashboard(dashboard_path: str, db_path: str):
@@ -360,7 +397,7 @@ def main():
         config_data = yaml.safe_load(f)
 
     # Resolve variables: expand any 'tables' entries into individual variables
-    variables = resolve_variables(config_data)
+    variables, variable_model_map = resolve_variables(config_data)
 
     # Put database in output directory on scratch filesystem (accessible from compute nodes)
     output_dir = Path(config_data["output_folder"])
@@ -391,8 +428,14 @@ def main():
     print(f"Submitting {len(variables)} CMORisation jobs...")
 
     for variable in variables:
+        # Inject per-variable model_id into config if an override exists
+        job_config = config_data
+        if variable in variable_model_map:
+            job_config = config_data.copy()
+            job_config["model_id"] = variable_model_map[variable]
+
         # Create job script - pass the scratch database path
-        script_path = create_job_script(variable, config_data, str(db_path), script_dir)
+        script_path = create_job_script(variable, job_config, str(db_path), script_dir)
         print(f"Created job script: {script_path}")
 
         # Submit job
