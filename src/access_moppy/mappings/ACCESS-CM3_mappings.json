@@ -207,6 +207,41 @@
                 "formula": "tos"
             }
         },
+        "so": {
+            "dimensions": {
+                "time": "time",
+                "zl": "lev",
+                "yh": "latitude",
+                "xh": "longitude"
+            },
+            "units": "psu",
+            "positive": null,
+            "model_variables": [
+                "so"
+            ],
+            "calculation": {
+                "type": "direct",
+                "formula": "so"
+            },
+            "CF standard Name": "ocean_salinity"
+        },
+        "sos": {
+            "dimensions": {
+                "time": "time",
+                "yh": "latitude",
+                "xh": "longitude"
+            },
+            "units": "psu",
+            "positive": null,
+            "model_variables": [
+                "sos"
+            ],
+            "calculation": {
+                "type": "direct",
+                "formula": "sos"
+            },
+            "CF standard Name": "sea_surface_salinity"
+        },
         "zos": {
             "CF standard Name": "sea_surface_height_above_geoid",
             "dimensions": {
