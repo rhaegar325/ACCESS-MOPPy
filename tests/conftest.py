@@ -317,6 +317,10 @@ def _filter_variables_by_test_data(variables, table_name):
             "vegHeight",
             "wetlandFrac",
         ],
+        "fx": [
+            "areacella",  # Cell area on native grid
+            "orog",  # Surface orography
+        ],
     }
 
     # Get the compatible variables for this table
