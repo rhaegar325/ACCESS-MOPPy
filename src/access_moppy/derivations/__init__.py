@@ -24,9 +24,23 @@ from access_moppy.derivations.calc_land import (
     extract_tilefrac,
     weighted_tile_sum,
 )
+from access_moppy.derivations.calc_ocean import (
+    calc_areacello,
+    calc_global_ave_ocean,
+    calc_ocean_depth_integral,
+    calc_rsdoabsorb,
+    calc_total_mass_transport,
+    calc_umo_corrected,
+    calc_vmo_corrected,
+    calc_zostoga,
+    ocean_floor,
+)
 from access_moppy.derivations.calc_utils import (
     calculate_monthly_maximum,
     calculate_monthly_minimum,
+    drop_axis,
+    drop_time_axis,
+    squeeze_axis,
 )
 
 custom_functions = {
@@ -50,6 +64,9 @@ custom_functions = {
     "optical_depth": optical_depth,
     "calculate_monthly_minimum": calculate_monthly_minimum,
     "calculate_monthly_maximum": calculate_monthly_maximum,
+    "drop_axis": drop_axis,
+    "drop_time_axis": drop_time_axis,
+    "squeeze_axis": squeeze_axis,
     "weighted_tile_sum": weighted_tile_sum,
     "calc_cland_with_wood_products": calc_cland_with_wood_products,
     "calc_carbon_pool_kg_m2": calc_carbon_pool_kg_m2,
@@ -58,6 +75,15 @@ custom_functions = {
     "calc_mrsfl": calc_mrsfl,
     "calc_mrsll": calc_mrsll,
     "calc_mrsol": calc_mrsol,
+    "calc_rsdoabsorb": calc_rsdoabsorb,
+    "calc_zostoga": calc_zostoga,
+    "calc_ocean_depth_integral": calc_ocean_depth_integral,
+    "calc_global_ave_ocean": calc_global_ave_ocean,
+    "calc_total_mass_transport": calc_total_mass_transport,
+    "calc_umo_corrected": calc_umo_corrected,
+    "calc_vmo_corrected": calc_vmo_corrected,
+    "ocean_floor": ocean_floor,
+    "calc_areacello": calc_areacello,
 }
 
 

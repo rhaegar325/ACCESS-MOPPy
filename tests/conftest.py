@@ -321,6 +321,65 @@ def _filter_variables_by_test_data(variables, table_name):
             "areacella",  # Cell area on native grid
             "orog",  # Surface orography
         ],
+        "Omon": [
+            # Ocean variables that are commonly available and suitable for testing
+            "evs",  # Water Evaporation Flux from Sea Water
+            "thetao",  # Sea Water Potential Temperature
+            "so",  # Sea Water Salinity
+            "uo",  # Sea Water X Velocity
+            "vo",  # Sea Water Y Velocity
+            "zos",  # Sea Surface Height Above Geoid
+            "mlotst",  # Ocean Mixed Layer Thickness Defined by Sigma T
+            "thkcello",  # Cell Thickness
+            "volcello",  # Ocean Grid-Cell Volume
+            "areacello",  # Ocean Grid-Cell Area
+            "sftof",  # Sea Area Fraction
+            "wfo",  # Water Flux into Sea Water
+            "pbo",  # Sea Water Pressure at Sea Floor
+            "tob",  # Sea Water Potential Temperature at Sea Floor
+            "sob",  # Sea Water Salinity at Sea Floor
+            "tos",  # Sea Surface Temperature
+            "sos",  # Sea Surface Salinity
+            "bigthetao",  # Sea Water Conservative Temperature
+            "agessc",  # Sea Water Age Since Surface Contact
+            "ficeberg2d",  # Iceberg Calving Flux
+            "bigthetaoga",  # Sea Water Conservative Temperature on Ocean Grid at Sea Surface
+            "hfbasinpmadv",  # Heat Flux at Basin Level
+            "hfevapds",  # Heat Flux due to Evaporation
+            "hfrainds",  # Heat Flux due to Rain
+            "htovgyre",  # Heat Transport by Gyre
+            "htovovrt",  # Heat Transport by Overturning
+            "masscello",  # Ocean Mass
+            "mfo",  # Ocean Mass Flux
+            "mlotst",  # Ocean Mixed Layer Thickness
+            "msftmrho",  # Ocean Surface Temperature
+            "msftmz",  # Ocean Surface Salinity
+            "msftyrho",  # Ocean Surface Density
+            "pbo",  # Sea Water Pressure at Sea Floor
+            "sltovgyre",  # Salt Transport by Gyre
+            "sltovovrt",  # Salt Transport by Overturning
+            "so",  # Sea Water Salinity
+            "sob",  # Sea Water Salinity at Sea Floor
+            "soga",  # Sea Water Salinity on Ocean Grid at Sea Surface
+            "sos",  # Sea Surface Salinity
+            "sosga",  # Sea Surface Salinity on Ocean Grid at Sea Surface
+            "tauuo",  # Zonal Wind Stress
+            "tauvo",  # Meridional Wind Stress
+            "thetaoga",  # Sea Water Conservative Temperature on Ocean Grid at Sea Surface
+            "tob",  # Sea Water Potential Temperature at Sea Floor
+            "umo",  # Sea Water X Velocity on Ocean Grid
+            "uo",  # Sea Water X Velocity
+            "vmo",  # Sea Water Y Velocity on Ocean Grid
+            "vo",  # Sea Water Y Velocity
+            "volo",  # Ocean Grid-Cell Volume
+            "wo",  # Sea Water Vertical Velocity
+        ],
+        "Ofx": [
+            "areacello",  # Ocean Grid-Cell Area
+            "deptho",  # Ocean Depth
+            "masscello",  # Ocean Mass
+            "thkcello",  # Cell Thickness
+        ],
     }
 
     # Get the compatible variables for this table

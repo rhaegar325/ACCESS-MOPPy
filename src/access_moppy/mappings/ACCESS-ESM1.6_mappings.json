@@ -3407,6 +3407,27 @@
             },
             "CF standard Name": ""
         },
+        "areacello": {
+            "dimensions": {
+                "time": "time",
+                "yt_ocean": "latitude",
+                "xt_ocean": "longitude"
+            },
+            "units": "m2",
+            "positive": null,
+            "model_variables": [
+                "area_t", "ht"
+            ],
+            "calculation": {
+                "type": "formula",
+                "operation": "calc_areacello",
+                "args": [
+                    "area_t",
+                    "ht"
+                ]
+            },
+            "CF standard Name": ""
+        },
         "bigthetao": {
             "dimensions": {
                 "time": "time",
@@ -3424,6 +3445,48 @@
                 "formula": "temp"
             },
             "CF standard Name": ""
+        },
+        "bigthetaoga": {
+            "dimensions": {
+                "time": "time",
+                "st_ocean": "lev",
+                "yt_ocean": "latitude",
+                "xt_ocean": "longitude"
+            },
+            "units": "deg_C",
+            "positive": null,
+            "model_variables": [
+                "temp",
+                "rho_dzt",
+                "area_t"
+            ],
+            "calculation": {
+                "type": "formula",
+                "formula": "calc_global_ave_ocean",
+                "args": [
+                    "temp",
+                    "rho_dzt",
+                    "area_t"
+                ]
+            },
+            "CF standard Name": "sea_water_conservative_temperature"
+        },
+        "deptho": {
+            "dimensions": {
+                "xt_ocean": "longitude",
+                "yt_ocean": "latitude"
+            },
+            "units": "m",
+            "positive": null,
+            "model_variables": [
+                "ht"
+            ],
+            "calculation": {
+                "type": "formula",
+                "operation": "drop_time_axis",
+                "args": ["ht"]
+            },
+            "CF standard Name": "sea_floor_depth_below_geoid"
         },
         "evs": {
             "dimensions": {
@@ -3476,6 +3539,28 @@
             },
             "CF standard Name": ""
         },
+        "fsitherm": {
+            "dimensions": {
+                "time": "time",
+                "yt_ocean": "latitude",
+                "xt_ocean": "longitude"
+            },
+            "units": "W m-2",
+            "positive": null,
+            "model_variables": [
+                "wfimelt",
+                "wfiform"
+            ],
+            "calculation": {
+                "type": "operation",
+                "operation": "add",
+                "args": [
+                    "wfimelt",
+                    "wfiform"
+                ]
+            },
+            "CF standard Name": "water_flux_into_sea_water_due_to_sea_ice_thermodynamics"
+        },
         "hfds": {
             "dimensions": {
                 "time": "time",
@@ -3494,7 +3579,10 @@
                 "type": "formula",
                 "operation": "sum_vars",
                 "args": [
-                    "var"
+                "sfc_hflux_from_runoff",
+                "sfc_hflux_coupler",
+                "sfc_hflux_pme",
+                "frazil_3d_int_z"
                 ]
             },
             "CF standard Name": ""
@@ -3502,8 +3590,8 @@
         "hfevapds": {
             "dimensions": {
                 "time": "time",
-                "yh": "latitude",
-                "xh": "longitude"
+                "yt_ocean": "latitude",
+                "xt_ocean": "longitude"
             },
             "units": "W m-2",
             "positive": null,
@@ -3565,7 +3653,7 @@
                 "type": "direct",
                 "formula": "sfc_hflux_from_water_prec"
             },
-            "CF standard Name": ""
+            "CF standard Name": "temperature_flux_due_to_rainfall_expressed_as_heat_flux_into_sea_water"
         },
         "hfrunoffds2d": {
             "dimensions": {
@@ -3662,7 +3750,6 @@
         },
         "masscello": {
             "dimensions": {
-                "time": "time",
                 "st_ocean": "lev",
                 "yt_ocean": "latitude",
                 "xt_ocean": "longitude"
@@ -3673,10 +3760,11 @@
                 "rho_dzt"
             ],
             "calculation": {
-                "type": "direct",
-                "formula": "rho_dzt"
+                "type": "formula",
+                "operation": "drop_time_axis",
+                "args": ["rho_dzt"]
             },
-            "CF standard Name": ""
+            "CF standard Name": "sea_water_mass_per_unit_area"
         },
         "mlotst": {
             "dimensions": {
@@ -3734,6 +3822,145 @@
             },
             "CF standard Name": ""
         },
+        "ocontempdiff": {
+            "dimensions": {
+                "time": "time",
+                "st_ocean": "lev",
+                "yt_ocean": "latitude",
+                "xt_ocean": "longitude"
+            },
+            "units": "m2 s-1",
+            "positive": null,
+            "model_variables": [
+                "temp_vdiffuse_diff_cbt"
+            ],
+            "calculation": {
+                "type": "direct",
+                "formula": "temp_vdiffuse_diff_cbt"
+            },
+            "CF standard Name": ""
+        },
+        "ocontempmint": {
+            "dimensions": {
+                "time": "time",
+                "st_ocean": "lev",
+                "yt_ocean": "latitude",
+                "xt_ocean": "longitude"
+            },
+            "units": "m2 s-1",
+            "positive": null,
+            "model_variables": [
+                "temp",
+                "pot_rho_0",
+                "dzt"
+            ],
+            "calculation": {
+                "type": "formula",
+                "formula": "calc_ocean_depth_integral",
+                "args": [
+                    "temp",
+                    "pot_rho_0",
+                    "dzt"
+                ]
+            },
+            "CF standard Name": "tendency_of_sea_water_conservative_temperature_expressed_as_heat_content_due_to_parameterized_dianeutral_mixing"
+        },
+        "opottempmint": {
+            "dimensions": {
+                "time": "time",
+                "yt_ocean": "latitude",
+                "xt_ocean": "longitude"
+            },
+            "units": "m2 s-1",
+            "positive": null,
+            "model_variables": [
+                "pot_temp",
+                "pot_rho_0",
+                "dzt"
+            ],
+            "calculation": {
+                "type": "formula",
+                "formula": "calc_ocean_surface_depth_integral",
+                "args": [
+                    "pot_temp",
+                    "pot_rho_0",
+                    "dzt"
+                ]
+            },
+            "CF standard Name": "tendency_of_sea_water_conservative_temperature_at_sea_surface_expressed_as_heat_content_due_to_parameterized_dianeutral_mixing"
+        },
+        "ocontemppsmadvect": {
+            "dimensions": {
+                "time": "time",
+                "st_ocean": "lev",
+                "yt_ocean": "latitude",
+                "xt_ocean": "longitude"
+            },
+            "units": "m2 s-1",
+            "positive": null,
+            "model_variables": [
+                "temp_submeso"
+            ],
+            "calculation": {
+                "type": "direct",
+                "formula": "temp_submeso"
+            },
+            "CF standard Name": "tendency_of_sea_water_conservative_temperature_expressed_as_heat_content_due_to_parameterized_submesoscale_eddy_advection"
+        },
+        "ocontemptend": {
+            "dimensions": {
+                "time": "time",
+                "st_ocean": "lev",
+                "yt_ocean": "latitude",
+                "xt_ocean": "longitude"
+            },
+            "units": "K s-1",
+            "positive": null,
+            "model_variables": [
+                "temp_tendency"
+            ],
+            "calculation": {
+                "type": "direct",
+                "formula": "temp_tendency"
+            },
+            "CF standard Name": "tendency_of_sea_water_conservative_temperature_expressed_as_heat_content"
+        },
+        "osaltdiff": {
+            "dimensions": {
+                "time": "time",
+                "st_ocean": "lev",
+                "yt_ocean": "latitude",
+                "xt_ocean": "longitude"
+            },
+            "units": "m2 s-1",
+            "positive": null,
+            "model_variables": [
+                "salt_vdiffuse_impl"
+            ],
+            "calculation": {
+                "type": "direct",
+                "formula": "salt_vdiffuse_impl"
+            },
+            "CF standard Name": "tendency_of_sea_water_salinity_expressed_as_salt_content_due_to_parameterized_dianeutral_mixing"
+        },
+        "osaltpsmadvect": {
+            "dimensions": {
+                "time": "time",
+                "st_ocean": "lev",
+                "yt_ocean": "latitude",
+                "xt_ocean": "longitude"
+            },
+            "units": "m2 s-1",
+            "positive": null,
+            "model_variables": [
+                "salt_submeso"
+            ],
+            "calculation": {
+                "type": "direct",
+                "formula": "salt_submeso"
+            },
+            "CF standard Name": "tendency_of_sea_water_salinity_due_to_parameterized_submesoscale_eddy_advection"
+        },
         "pbo": {
             "dimensions": {
                 "time": "time",
@@ -3770,7 +3997,7 @@
                 "type": "direct",
                 "formula": "patm_t"
             },
-            "CF standard Name": ""
+            "CF standard Name": "sea_water_pressure_at_sea_water_surface"
         },
         "rlntds": {
             "dimensions": {
@@ -3806,6 +4033,29 @@
                 "formula": "sw_heat"
             },
             "CF standard Name": ""
+        },
+        "rsdoabsorb": {
+            "dimensions": {
+                "time": "time",
+                "st_ocean": "lev",
+                "yt_ocean": "latitude",
+                "xt_ocean": "longitude"
+            },
+            "units": "W m-2",
+            "positive": null,
+            "model_variables": [
+                "sw_heat",
+                "swflx"
+            ],
+            "calculation": {
+                "type": "formula",
+                "formula": "calc_rsdoabsorb",
+                "args": [
+                    "sw_heat",
+                    "swflx"
+                ]
+            },
+            "CF standard Name": "net_rate_of_absorption_of_shortwave_energy_in_ocean_layer"
         },
         "rsntds": {
             "dimensions": {
@@ -3876,22 +4126,130 @@
             },
             "CF standard Name": ""
         },
-        "sos": {
+        "soga": {
             "dimensions": {
                 "time": "time",
-                "yh": "latitude",
-                "xh": "longitude"
+                "st_ocean": "lev",
+                "yt_ocean": "latitude",
+                "xt_ocean": "longitude"
             },
             "units": "psu",
             "positive": null,
             "model_variables": [
-                "sss"
+                "salt",
+                "rho_dzt",
+                "area_t"
+            ],
+            "calculation": {
+                "type": "formula",
+                "formula": "calc_global_ave_ocean",
+                "args": [
+                    "salt",
+                    "rho_dzt",
+                    "area_t"
+                ]
+            },
+            "CF standard Name": "sea_water_salinity"
+        },
+        "somint": {
+            "dimensions": {
+                "time": "time",
+                "st_ocean": "lev",
+                "yt_ocean": "latitude",
+                "xt_ocean": "longitude"
+            },
+            "units": "psu",
+            "positive": null,
+            "model_variables": [
+                "salt",
+                "pot_rho_0",
+                "dzt"
+            ],
+            "calculation": {
+                "type": "formula",
+                "formula": "calc_ocean_depth_integral",
+                "args": [
+                    "salt",
+                    "pot_rho_0",
+                    "dzt"
+                ]
+            },
+            "CF standard Name": ""
+        },
+        "sos": {
+            "dimensions": {
+                "time": "time",
+                "xt_ocean": "latitude",
+                "yt_ocean": "longitude"
+            },
+            "units": "psu",
+            "positive": null,
+            "model_variables": [
+                "surface_salt"
             ],
             "calculation": {
                 "type": "direct",
-                "formula": "sss"
+                "formula": "surface_salt"
             },
             "CF standard Name": ""
+        },
+        "sosga": {
+            "dimensions": {
+                "time": "time",
+                "xt_ocean": "latitude",
+                "yt_ocean": "longitude"
+            },
+            "units": "psu",
+            "positive": null,
+            "model_variables": [
+                "surface_salt",
+                "rho_dzt",
+                "area_t"
+            ],
+            "calculation": {
+                "type": "formula",
+                "formula": "calc_global_ave_ocean",
+                "args": [
+                    "surface_salt",
+                    "rho_dzt",
+                    "area_t"
+                ]
+            },
+            "CF standard Name": "sea_surface_salinity"
+        },
+        "tauuo": {
+            "dimensions": {
+                "time": "time",
+                "yu_ocean": "latitude",
+                "xu_ocean": "longitude"
+            },
+            "units": "N m-2",
+            "positive": null,
+            "model_variables": [
+                "tau_x"
+            ],
+            "calculation": {
+                "type": "direct",
+                "formula": "tau_x"
+            },
+            "CF standard Name": "downward_x_stress_at_sea_water_surface"
+        },
+        "tauvo": {
+            "dimensions": {
+                "time": "time",
+                "yu_ocean": "latitude",
+                "xu_ocean": "longitude"
+            },
+            "units": "N m-2",
+            "positive": null,
+            "model_variables": [
+                "tau_y"
+            ],
+            "calculation": {
+                "type": "direct",
+                "formula": "tau_y"
+            },
+            "CF standard Name": "downward_y_stress_at_sea_water_surface"
         },
         "thetao": {
             "dimensions": {
@@ -3914,9 +4272,33 @@
             },
             "CF standard Name": ""
         },
-        "thkcello": {
+        "thetaoga": {
             "dimensions": {
                 "time": "time",
+                "st_ocean": "lev",
+                "yt_ocean": "latitude",
+                "xt_ocean": "longitude"
+            },
+            "units": "K",
+            "positive": null,
+            "model_variables": [
+                "pot_temp",
+                "rho_dzt",
+                "area_t"
+            ],
+            "calculation": {
+                "type": "formula",
+                "formula": "calc_global_ave_ocean",
+                "args": [
+                    "pot_temp",
+                    "rho_dzt",
+                    "area_t"
+                ]
+            },
+            "CF standard Name": "sea_water_potential_temperature"
+        },
+        "thkcello": {
+            "dimensions": {
                 "st_ocean": "lev",
                 "yt_ocean": "latitude",
                 "xt_ocean": "longitude"
@@ -3924,13 +4306,34 @@
             "units": "m",
             "positive": null,
             "model_variables": [
-                "dht"
+                "dzt"
             ],
             "calculation": {
-                "type": "direct",
-                "formula": "dht"
+                "type": "formula",
+                "operation": "drop_time_axis",
+                "args": ["dzt"]
             },
-            "CF standard Name": ""
+            "CF standard Name": "cell_thickness"
+        },
+        "tob": {
+            "dimensions": {
+                "time": "time",
+                "yt_ocean": "latitude",
+                "xt_ocean": "longitude"
+            },
+            "units": "K",
+            "positive": null,
+            "model_variables": [
+                "pot_temp"
+            ],
+            "calculation": {
+                "type": "formula",
+                "operation": "ocean_floor",
+                "operands": [
+                    "pot_temp"
+                ]
+            },
+            "CF standard Name": "sea_water_potential_temperature_at_sea_floor"
         },
         "tos": {
             "dimensions": {
@@ -3952,6 +4355,56 @@
             },
             "CF standard Name": ""
         },
+        "tosga": {
+            "dimensions": {
+                "time": "time",
+                "lon": "yt_ocean",
+                "lat": "xt_ocean"
+            },
+            "units": "K",
+            "positive": null,
+            "model_variables": [
+                "surface_temp",
+                "rho_dzt",
+                "area_t"
+            ],
+            "calculation": {
+                "type": "formula",
+                "operation": "calc_global_ave_ocean",
+                "args": [
+                    "surface_temp",
+                    "rho_dzt",
+                    "area_t"
+                ]
+            },
+            "CF standard Name": "sea_surface_temperature"
+        },
+        "tossq": {
+            "dimensions": {
+                "time": "time",
+                "lon": "yt_ocean",
+                "lat": "xt_ocean"
+            },
+            "units": "K",
+            "positive": null,
+            "model_variables": [
+                "surface_temp"
+            ],
+            "calculation": {
+                "type": "formula",
+                "operation": "power",
+                "args": [
+                    {
+                        "operation": "kelvin_to_celsius",
+                        "args": [
+                            "surface_temp"
+                        ]
+                    },
+                    2
+                ]
+            },
+            "CF standard Name": ""
+        },
         "umo": {
             "dimensions": {
                 "time": "time",
@@ -3962,13 +4415,20 @@
             "units": "kg/s",
             "positive": null,
             "model_variables": [
-                "tx_trans"
+                "tx_trans",
+                "tx_trans_gm",
+                "tx_trans_submeso"
             ],
             "calculation": {
-                "type": "direct",
-                "formula": "tx_trans"
+                "type": "formula",
+                "operation": "calc_umo_corrected",
+                "args": [
+                    "tx_trans",
+                    "tx_trans_gm",
+                    "tx_trans_submeso"
+                ]
             },
-            "CF standard Name": ""
+            "CF standard Name": "ocean_mass_x_transport"
         },
         "uo": {
             "dimensions": {
@@ -3988,6 +4448,29 @@
             },
             "CF standard Name": ""
         },
+        "volcello": {
+            "dimensions": {
+                "time": "time",
+                "st_ocean": "lev",
+                "yt_ocean": "latitude",
+                "xt_ocean": "longitude"
+            },
+            "units": "m3",
+            "positive": null,
+            "model_variables": [
+                "dzt",
+                "area_t"
+            ],
+            "calculation": {
+                "type": "formula",
+                "operation": "multiply",
+                "args": [
+                    "dzt",
+                    "area_t"
+                ]
+            },
+            "CF standard Name": ""
+        },
         "vmo": {
             "dimensions": {
                 "time": "time",
@@ -3998,13 +4481,20 @@
             "units": "kg/s",
             "positive": null,
             "model_variables": [
-                "ty_trans"
+                "ty_trans",
+                "ty_trans_gm",
+                "ty_trans_submeso"
             ],
             "calculation": {
-                "type": "direct",
-                "formula": "ty_trans"
+                "type": "formula",
+                "operation": "calc_vmo_corrected",
+                "args": [
+                    "ty_trans",
+                    "ty_trans_gm",
+                    "ty_trans_submeso"
+                ]
             },
-            "CF standard Name": ""
+            "CF standard Name": "ocean_mass_y_transport"
         },
         "vo": {
             "dimensions": {
@@ -4122,14 +4612,14 @@
             "positive": null,
             "model_variables": [
                 "pot_temp",
-                "dht"
+                "dzt"
             ],
             "calculation": {
                 "type": "formula",
                 "operation": "calc_zostoga",
                 "args": [
                     "pot_temp",
-                    "dht"
+                    "dzt"
                 ]
             },
             "CF standard Name": ""
