@@ -2967,7 +2967,8 @@
         "orog": {
             "dimensions": {
                 "lat": "lat",
-                "lon": "lon"
+                "lon": "lon",
+                "time": "time"
             },
             "units": "m",
             "positive": null,
@@ -2975,14 +2976,8 @@
                 "fld_s00i033"
             ],
             "calculation": {
-                "type": "formula",
-                "operation": "isel",
-                "args": [
-                    "fld_s00i033"
-                ],
-                "kwargs": {
-                    "time": 0
-                }
+                "type": "direct",
+                "formula": "fld_s00i033"
             },
             "CF standard Name": "surface_altitude"
         },
