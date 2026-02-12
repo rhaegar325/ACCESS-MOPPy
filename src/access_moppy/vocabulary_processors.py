@@ -187,11 +187,18 @@ class CMIP6Vocabulary:
             "Lmon",
             "Omon",
             "Emon",
+            "CFmon",
             "day",
             "6hrLev",
             "3hr",
             "Ofx",
             "fx",
+            "day",
+            "6hrPlev",
+            "3hr",
+            "CFmon",
+            "Eday",
+            "AERmon",
         ]
         found_in_tables = []
 
