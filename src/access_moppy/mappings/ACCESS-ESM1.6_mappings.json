@@ -3309,13 +3309,22 @@
             ],
             "calculation": {
                 "type": "formula",
-                "operation": "weighted_tile_sum",
+                "operation": "drop_axis",
                 "args": [
-                    "fld_s03i319"
+                    {
+                        "operation": "weighted_tile_sum",
+                        "args": [
+                            "fld_s03i319"
+                        ],
+                        "kwargs": {
+                            "tilefrac": "fld_s03i317",
+                            "landfrac": 1.0,
+                            "pseudo_level": {"literal": "pseudo_level_2"}
+                        }
+                    }
                 ],
                 "kwargs": {
-                    "tilefrac": "fld_s03i317",
-                    "landfrac": "fld_s03i395"
+                    "dims": {"literal": "pseudo_level_0"}
                 }
             },
             "CF standard Name": "vegetation_height"

@@ -337,7 +337,7 @@ def calc_landcover(var, model):
     return vout
 
 
-def weighted_tile_sum(var, tilefrac, landfrac=1.0):
+def weighted_tile_sum(var, tilefrac, landfrac=1.0, pseudo_level="pseudo_level_0"):
     """
     Returns variable weighted by tile fractions and summed over tiles.
 
@@ -359,8 +359,6 @@ def weighted_tile_sum(var, tilefrac, landfrac=1.0):
     xarray.DataArray
         Tile-weighted and land-fraction scaled variable.
     """
-    # TODO: Might be good to avoid hardcoding pseudo_level name
-    pseudo_level = "pseudo_level_0"
     vout = var * tilefrac
     vout = vout.sum(dim=pseudo_level)
     vout = vout * landfrac
