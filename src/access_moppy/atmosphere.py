@@ -4,7 +4,7 @@ import warnings
 import numpy as np
 import xarray as xr
 
-from access_moppy.base import CMIP6_CMORiser
+from access_moppy.base import CMORiser
 from access_moppy.derivations import custom_functions, evaluate_expression
 from access_moppy.utilities import (
     calculate_latitude_bounds,
@@ -13,9 +13,9 @@ from access_moppy.utilities import (
 )
 
 
-class CMIP6_Atmosphere_CMORiser(CMIP6_CMORiser):
+class Atmosphere_CMORiser(CMORiser):
     """
-    Handles CMORisation of NetCDF datasets using CMIP6 metadata (Atmosphere/Land).
+    Handles CMORisation of NetCDF datasets for Atmosphere/Land variables across CMIP versions.
     """
 
     def calculate_missing_bounds_variables(self, bnds_required):
@@ -64,7 +64,7 @@ class CMIP6_Atmosphere_CMORiser(CMIP6_CMORiser):
                 else:
                     # For other coordinates, we could add more handlers or skip
                     warnings.warn(
-                        f"No automatic calculation available for '{bnds_var}'. This may cause CMIP6 compliance issues.",
+                        f"No automatic calculation available for '{bnds_var}'. This may cause CMIP compliance issues.",
                         UserWarning,
                         stacklevel=3,
                     )
@@ -211,9 +211,14 @@ class CMIP6_Atmosphere_CMORiser(CMIP6_CMORiser):
         self.ds = self.ds.rename(rename_map)
 
         # Transpose the data variable according to the CMOR dimensions
-        cmor_dims = re.sub(
-            r"\w*level", "lev", self.vocab.variable["dimensions"]
-        ).split()
+        # Handle both string and list dimension formats
+        dimensions = self.vocab.variable["dimensions"]
+        try:
+            # Try treating as string (space-separated)
+            cmor_dims = re.sub(r"\w*level", "lev", dimensions).split()
+        except TypeError:
+            # If re.sub() fails (TypeError for list input), it's already a list
+            cmor_dims = [re.sub(r"\w*level", "lev", dim) for dim in dimensions]
 
         transpose_order = [
             self.vocab.axes[dim]["out_name"]

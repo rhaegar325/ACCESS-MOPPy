@@ -9,7 +9,7 @@ import netCDF4 as nc
 import numpy as np
 import psutil
 import xarray as xr
-from cftime import date2num, num2date
+from cftime import date2num
 from dask.distributed import get_client
 
 from access_moppy.utilities import (
@@ -165,9 +165,9 @@ class DatasetChunker:
         return rechunked_ds
 
 
-class CMIP6_CMORiser:
+class CMORiser:
     """
-    Base class for CMIP6 CMORisers, providing shared logic for CMORisation.
+    Base class for CMORisers, providing shared logic for CMORisation across different CMIP versions.
     """
 
     type_mapping = type_mapping
@@ -177,7 +177,7 @@ class CMIP6_CMORiser:
         input_data: Optional[Union[str, List[str], xr.Dataset, xr.DataArray]] = None,
         *,
         output_path: str,
-        cmip6_vocab: Any,
+        vocab: Any,
         variable_mapping: Dict[str, Any],
         compound_name: str,
         drs_root: Optional[Path] = None,
@@ -229,7 +229,7 @@ class CMIP6_CMORiser:
         self.output_path = output_path
         # Extract cmor_name from compound_name
         _, self.cmor_name = compound_name.split(".")
-        self.vocab = cmip6_vocab
+        self.vocab = vocab
         self.mapping = variable_mapping
         self.drs_root = Path(drs_root) if drs_root is not None else None
         self.version_date = datetime.now().strftime("%Y%m%d")
@@ -340,22 +340,31 @@ class CMIP6_CMORiser:
                     )
                 else:
                     try:
-                        # Enhanced validation with CMIP6 frequency compatibility
-                        detected_freq, resampling_required = (
-                            validate_cmip6_frequency_compatibility(
-                                self.input_paths,
-                                self.compound_name,
-                                time_coord="time",
-                                interactive=True,
+                        # Enhanced validation with CMIP frequency compatibility
+                        # Use CMIP6-specific validation if available, otherwise skip
+                        if (
+                            hasattr(self.vocab, "__class__")
+                            and "CMIP6" in self.vocab.__class__.__name__
+                        ):
+                            detected_freq, resampling_required = (
+                                validate_cmip6_frequency_compatibility(
+                                    self.input_paths,
+                                    self.compound_name,
+                                    time_coord="time",
+                                    interactive=True,
+                                )
                             )
-                        )
-                        if resampling_required:
-                            print(
-                                f"✓ Temporal resampling will be applied: {detected_freq} → CMIP6 target frequency"
-                            )
+                            if resampling_required:
+                                print(
+                                    f"✓ Temporal resampling will be applied: {detected_freq} → CMIP6 target frequency"
+                                )
+                            else:
+                                print(
+                                    f"✓ Validated compatible temporal frequency: {detected_freq}"
+                                )
                         else:
                             print(
-                                f"✓ Validated compatible temporal frequency: {detected_freq}"
+                                "✓ Skipping detailed frequency validation for this CMIP version"
                             )
                     except (FrequencyMismatchError, IncompatibleFrequencyError) as e:
                         raise e  # Re-raise these specific errors as-is
@@ -394,7 +403,7 @@ class CMIP6_CMORiser:
                 )
 
                 if was_resampled:
-                    print("✅ Applied temporal resampling to match CMIP6 requirements")
+                    print("✅ Applied temporal resampling to match CMIP requirements")
                 else:
                     print("✅ No resampling needed - frequency already compatible")
 
@@ -727,19 +736,16 @@ class CMIP6_CMORiser:
         self.ds = ordered(self.ds)
 
     def _build_drs_path(self, attrs: Dict[str, str]) -> Path:
-        drs_components = [
-            attrs.get("mip_era", "CMIP6"),
-            attrs["activity_id"],
-            attrs["institution_id"],
-            attrs["source_id"],
-            attrs["experiment_id"],
-            attrs["variant_label"],
-            attrs["table_id"],
-            attrs["variable_id"],
-            attrs["grid_label"],
-            f"v{self.version_date}",
-        ]
-        return self.drs_root.joinpath(*drs_components)
+        """
+        Build DRS path using the vocabulary class's controlled vocabulary specifications.
+        """
+        if not hasattr(self.vocab, "build_drs_path"):
+            raise AttributeError(
+                f"Vocabulary class {type(self.vocab).__name__} does not implement build_drs_path() method. "
+                "Please ensure you are using a proper CMIP vocabulary class (CMIP6Vocabulary or CMIP7Vocabulary)."
+            )
+
+        return self.vocab.build_drs_path(self.drs_root, self.version_date)
 
     def _update_latest_symlink(self, versioned_path: Path):
         latest_link = versioned_path.parent / "latest"
@@ -782,18 +788,15 @@ class CMIP6_CMORiser:
                 aux_coords.append(name)
 
         attrs = self.ds.attrs
-        required_keys = [
-            "variable_id",
-            "table_id",
-            "source_id",
-            "experiment_id",
-            "variant_label",
-            "grid_label",
-        ]
+
+        # Get required attributes from the vocabulary (works for both CMIP6 and CMIP7)
+        required_keys = self.vocab.get_required_attribute_names()
+
         missing = [k for k in required_keys if k not in attrs]
         if missing:
-            raise ValueError(
-                f"Missing required CMIP6 global attributes for filename: {missing}"
+            print(f"⚠️  Warning: Missing required global attributes: {missing}")
+            print(
+                "   Some attributes may be required for CMIP compliance but file will still be written."
             )
 
         # ========== Memory Check ==========
@@ -878,62 +881,9 @@ class CMIP6_CMORiser:
                 f"Data size: {data_size / 1024**3:.2f} GB, Available memory: {available_memory / 1024**3:.2f} GB"
             )
 
-        # Generate filename based on whether time coordinate exists
-        if "time" in self.ds[self.cmor_name].coords:
-            # Time-dependent variable: include time range in filename
-            time_var = self.ds[self.cmor_name].coords["time"]
-            units = time_var.attrs["units"]
-            calendar = time_var.attrs.get("calendar", "standard").lower()
-            times = num2date(time_var.values[[0, -1]], units=units, calendar=calendar)
-            start, end = [f"{t.year:04d}{t.month:02d}" for t in times]
-            time_range = f"{start}-{end}"
-            filename = (
-                f"{attrs['variable_id']}_{attrs['table_id']}_{attrs['source_id']}_"
-                f"{attrs['experiment_id']}_{attrs['variant_label']}_"
-                f"{attrs['grid_label']}_{time_range}.nc"
-            )
-        else:
-            # Time-independent variable: use "fx" (fixed) indicator instead of time range
-            filename = (
-                f"{attrs['variable_id']}_{attrs['table_id']}_{attrs['source_id']}_"
-                f"{attrs['experiment_id']}_{attrs['variant_label']}_"
-                f"{attrs['grid_label']}_fx.nc"
-            )
-
-        # Check if this is sub-daily or daily data based on table_id or compound_name
-        is_subdaily_data = False
-        is_daily_data = False
-
-        if hasattr(self, "compound_name") and self.compound_name:
-            table_name = self.compound_name.split(".")[0]
-            table_lower = table_name.lower()
-            is_subdaily_data = any(freq in table_lower for freq in ["3hr", "6hr", "hr"])
-            is_daily_data = "day" in table_lower
-        elif "table_id" in attrs:
-            table_lower = attrs["table_id"].lower()
-            is_subdaily_data = any(freq in table_lower for freq in ["3hr", "6hr", "hr"])
-            is_daily_data = "day" in table_lower
-
-        # Format time range based on frequency
-        if is_subdaily_data:
-            # Sub-daily data: include hour and minute (YYYYMMDDHHMM)
-            start, end = [
-                f"{t.year:04d}{t.month:02d}{t.day:02d}{t.hour:02d}{t.minute:02d}"
-                for t in times
-            ]
-        elif is_daily_data:
-            # Daily data: include day (YYYYMMDD)
-            start, end = [f"{t.year:04d}{t.month:02d}{t.day:02d}" for t in times]
-        else:
-            # Monthly or other data: year and month only (YYYYMM)
-            start, end = [f"{t.year:04d}{t.month:02d}" for t in times]
-
-        time_range = f"{start}-{end}"
-
-        filename = (
-            f"{attrs['variable_id']}_{attrs['table_id']}_{attrs['source_id']}_"
-            f"{attrs['experiment_id']}_{attrs['variant_label']}_"
-            f"{attrs['grid_label']}_{time_range}.nc"
+        # Generate filename using vocabulary-specific logic
+        filename = self.vocab.generate_filename(
+            attrs, self.ds, self.cmor_name, self.compound_name
         )
 
         if self.drs_root:

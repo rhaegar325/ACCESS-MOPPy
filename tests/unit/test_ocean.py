@@ -5,10 +5,10 @@ import pandas as pd
 import pytest
 import xarray as xr
 
-from access_moppy.base import CMIP6_CMORiser
+from access_moppy.base import CMORiser
 from access_moppy.ocean import (
-    CMIP6_Ocean_CMORiser_OM2,
-    CMIP6_Ocean_CMORiser_OM3,
+    Ocean_CMORiser_OM2,
+    Ocean_CMORiser_OM3,
 )
 from tests.mocks.mock_data import (
     create_mock_om2_dataset,
@@ -17,7 +17,7 @@ from tests.mocks.mock_data import (
 
 
 class TestCMIP6OceanCMORiserOM2:
-    """Unit tests for CMIP6_Ocean_CMORiser_OM2 (B-grid)."""
+    """Unit tests for Ocean_CMORiser_OM2 (B-grid)."""
 
     @pytest.fixture
     def mock_vocab(self):
@@ -62,11 +62,11 @@ class TestCMIP6OceanCMORiserOM2:
     ):
         """Test that T-grid is inferred from xt_ocean/yt_ocean coordinates."""
         with patch("access_moppy.ocean.Supergrid"):
-            cmoriser = CMIP6_Ocean_CMORiser_OM2(
+            cmoriser = Ocean_CMORiser_OM2(
                 input_paths=["test.nc"],
                 output_path=str(temp_dir),
                 compound_name="Omon.tos",
-                cmip6_vocab=mock_vocab,
+                vocab=mock_vocab,
                 variable_mapping=mock_mapping,
             )
             cmoriser.ds = mock_om2_dataset
@@ -87,11 +87,11 @@ class TestCMIP6OceanCMORiserOM2:
         )
 
         with patch("access_moppy.ocean.Supergrid"):
-            cmoriser = CMIP6_Ocean_CMORiser_OM2(
+            cmoriser = Ocean_CMORiser_OM2(
                 input_paths=["test.nc"],
                 output_path=str(temp_dir),
                 compound_name="Omon.uo",
-                cmip6_vocab=mock_vocab,
+                vocab=mock_vocab,
                 variable_mapping=mock_mapping,
             )
             cmoriser.ds = ds
@@ -104,11 +104,11 @@ class TestCMIP6OceanCMORiserOM2:
     def test_get_dim_rename_om2(self, mock_vocab, mock_mapping, temp_dir):
         """Test dimension renaming for ACCESS-OM2."""
         with patch("access_moppy.ocean.Supergrid"):
-            cmoriser = CMIP6_Ocean_CMORiser_OM2(
+            cmoriser = Ocean_CMORiser_OM2(
                 input_paths=["test.nc"],
                 output_path=str(temp_dir),
                 compound_name="Omon.tos",
-                cmip6_vocab=mock_vocab,
+                vocab=mock_vocab,
                 variable_mapping=mock_mapping,
             )
 
@@ -124,11 +124,11 @@ class TestCMIP6OceanCMORiserOM2:
     def test_arakawa_grid_type(self, mock_vocab, mock_mapping, temp_dir):
         """Test that ACCESS-OM2 uses B-grid (Arakawa B)."""
         with patch("access_moppy.ocean.Supergrid"):
-            cmoriser = CMIP6_Ocean_CMORiser_OM2(
+            cmoriser = Ocean_CMORiser_OM2(
                 input_paths=["test.nc"],
                 output_path=str(temp_dir),
                 compound_name="Omon.tos",
-                cmip6_vocab=mock_vocab,
+                vocab=mock_vocab,
                 variable_mapping=mock_mapping,
             )
 
@@ -140,12 +140,12 @@ class TestCMIP6OceanCMORiserOM2:
     ):
         """Test that time_bnds dimensions are identified as used coordinates."""
         with patch("access_moppy.ocean.Supergrid"):
-            with patch.object(CMIP6_CMORiser, "load_dataset", return_value=None):
-                cmoriser = CMIP6_Ocean_CMORiser_OM2(
+            with patch.object(CMORiser, "load_dataset", return_value=None):
+                cmoriser = Ocean_CMORiser_OM2(
                     input_paths=["test.nc"],
                     output_path=str(temp_dir),
                     compound_name="Omon.tos",
-                    cmip6_vocab=mock_vocab,
+                    vocab=mock_vocab,
                     variable_mapping=mock_mapping,
                 )
                 cmoriser.ds = mock_om2_dataset
@@ -162,7 +162,7 @@ class TestCMIP6OceanCMORiserOM2:
 
 
 class TestCMIP6OceanCMORiserOM3:
-    """Unit tests for CMIP6_Ocean_CMORiser_OM3 (C-grid)."""
+    """Unit tests for Ocean_CMORiser_OM3 (C-grid)."""
 
     @pytest.fixture
     def mock_vocab(self):
@@ -207,11 +207,11 @@ class TestCMIP6OceanCMORiserOM3:
     ):
         """Test that T-grid is inferred from xh/yh coordinates."""
         with patch("access_moppy.ocean.Supergrid"):
-            cmoriser = CMIP6_Ocean_CMORiser_OM3(
+            cmoriser = Ocean_CMORiser_OM3(
                 input_paths=["test.nc"],
                 output_path=str(temp_dir),
                 compound_name="Omon.tos",
-                cmip6_vocab=mock_vocab,
+                vocab=mock_vocab,
                 variable_mapping=mock_mapping,
             )
             cmoriser.ds = mock_om3_dataset
@@ -232,11 +232,11 @@ class TestCMIP6OceanCMORiserOM3:
         )
 
         with patch("access_moppy.ocean.Supergrid"):
-            cmoriser = CMIP6_Ocean_CMORiser_OM3(
+            cmoriser = Ocean_CMORiser_OM3(
                 input_paths=["test.nc"],
                 output_path=str(temp_dir),
                 compound_name="Omon.uo",
-                cmip6_vocab=mock_vocab,
+                vocab=mock_vocab,
                 variable_mapping=mock_mapping,
             )
             cmoriser.ds = ds
@@ -256,11 +256,11 @@ class TestCMIP6OceanCMORiserOM3:
         )
 
         with patch("access_moppy.ocean.Supergrid"):
-            cmoriser = CMIP6_Ocean_CMORiser_OM3(
+            cmoriser = Ocean_CMORiser_OM3(
                 input_paths=["test.nc"],
                 output_path=str(temp_dir),
                 compound_name="Omon.vo",
-                cmip6_vocab=mock_vocab,
+                vocab=mock_vocab,
                 variable_mapping=mock_mapping,
             )
             cmoriser.ds = ds
@@ -280,11 +280,11 @@ class TestCMIP6OceanCMORiserOM3:
         )
 
         with patch("access_moppy.ocean.Supergrid"):
-            cmoriser = CMIP6_Ocean_CMORiser_OM3(
+            cmoriser = Ocean_CMORiser_OM3(
                 input_paths=["test.nc"],
                 output_path=str(temp_dir),
                 compound_name="Omon.var",
-                cmip6_vocab=mock_vocab,
+                vocab=mock_vocab,
                 variable_mapping=mock_mapping,
             )
             cmoriser.ds = ds
@@ -297,11 +297,11 @@ class TestCMIP6OceanCMORiserOM3:
     def test_get_dim_rename_om3(self, mock_vocab, mock_mapping, temp_dir):
         """Test dimension renaming for ACCESS-OM3."""
         with patch("access_moppy.ocean.Supergrid"):
-            cmoriser = CMIP6_Ocean_CMORiser_OM3(
+            cmoriser = Ocean_CMORiser_OM3(
                 input_paths=["test.nc"],
                 output_path=str(temp_dir),
                 compound_name="Omon.tos",
-                cmip6_vocab=mock_vocab,
+                vocab=mock_vocab,
                 variable_mapping=mock_mapping,
             )
 
@@ -317,11 +317,11 @@ class TestCMIP6OceanCMORiserOM3:
     def test_arakawa_grid_type(self, mock_vocab, mock_mapping, temp_dir):
         """Test that ACCESS-OM3 uses C-grid (Arakawa C)."""
         with patch("access_moppy.ocean.Supergrid"):
-            cmoriser = CMIP6_Ocean_CMORiser_OM3(
+            cmoriser = Ocean_CMORiser_OM3(
                 input_paths=["test.nc"],
                 output_path=str(temp_dir),
                 compound_name="Omon.tos",
-                cmip6_vocab=mock_vocab,
+                vocab=mock_vocab,
                 variable_mapping=mock_mapping,
             )
 
