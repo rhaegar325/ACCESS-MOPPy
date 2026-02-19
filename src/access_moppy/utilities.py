@@ -145,36 +145,36 @@ def load_model_mappings(compound_name: str, model_id: str = None) -> Dict:
 
 
 def get_monthly_ocean_files(
-    compound_name: str, 
+    compound_name: str,
     root_folder: str = "/g/data/p73/archive/CMIP7/ACCESS-ESM1-6/spinup/Dec25-PI-control/",
     target_folders: str = "output40[0-9]/ocean/",
-    model_id: str = "ACCESS-ESM1.6"
+    model_id: str = "ACCESS-ESM1.6",
 ) -> List[str]:
     """
     Find ocean data files for a given CMOR variable.
-    
-    This utility function searches for ocean model output files that correspond to a 
-    specific CMIP variable by using the variable mapping to identify the required 
+
+    This utility function searches for ocean model output files that correspond to a
+    specific CMIP variable by using the variable mapping to identify the required
     model variables and then searching for files with the ocean-specific naming pattern.
-    
+
     Args:
         compound_name: CMOR compound name (e.g., 'Omon.so', 'Ofx.areacello')
         root_folder: Root directory to search for files (default: ACCESS-ESM1.6 Dec spin-up path)
         target_folders: Target folder pattern relative to root_folder (default: output40[0-9]/ocean/)
         model_id: Model identifier for loading mappings (default: ACCESS-ESM1.6)
-    
+
     Returns:
         List of absolute paths to matching ocean files
-        
+
     Raises:
         ValueError: If compound_name format is invalid
         FileNotFoundError: If root directory doesn't exist
-        
+
     Examples:
         >>> # Find ocean salinity files
         >>> files = get_monthly_ocean_files("Omon.so")
         >>> print(f"Found {len(files)} salinity files")
-        
+
         >>> # Find ocean cell area files (different location)
         >>> area_files = get_monthly_ocean_files(
         ...     "Ofx.areacello",
@@ -182,7 +182,7 @@ def get_monthly_ocean_files(
         ... )
     """
     import glob
-    
+
     # Validate inputs
     if not compound_name or "." not in compound_name:
         raise ValueError(
@@ -247,18 +247,22 @@ def get_monthly_ocean_files(
                     # Only warn if no alternatives were tried
                     warnings.warn(
                         f"No files found for model variable '{model_variable}' with pattern: {search_pattern}",
-                        UserWarning
+                        UserWarning,
                     )
 
             except Exception as e:
-                warnings.warn(f"Error searching for files with pattern '{search_pattern}': {e}")
+                warnings.warn(
+                    f"Error searching for files with pattern '{search_pattern}': {e}"
+                )
 
     # Remove duplicates and sort
     files_found = sorted(list(set(files_found)))
 
     if not files_found:
-        warnings.warn(f"No ocean files found for {compound_name} in {search_pattern_base}")
-    
+        warnings.warn(
+            f"No ocean files found for {compound_name} in {search_pattern_base}"
+        )
+
     return files_found
 
 
