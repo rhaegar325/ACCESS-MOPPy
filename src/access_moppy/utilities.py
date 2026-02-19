@@ -144,6 +144,124 @@ def load_model_mappings(compound_name: str, model_id: str = None) -> Dict:
     return {}
 
 
+def get_monthly_ocean_files(
+    compound_name: str, 
+    root_folder: str = "/g/data/p73/archive/CMIP7/ACCESS-ESM1-6/spinup/Dec25-PI-control/",
+    target_folders: str = "output40[0-9]/ocean/",
+    model_id: str = "ACCESS-ESM1.6"
+) -> List[str]:
+    """
+    Find ocean data files for a given CMOR variable.
+    
+    This utility function searches for ocean model output files that correspond to a 
+    specific CMIP variable by using the variable mapping to identify the required 
+    model variables and then searching for files with the ocean-specific naming pattern.
+    
+    Args:
+        compound_name: CMOR compound name (e.g., 'Omon.so', 'Ofx.areacello')
+        root_folder: Root directory to search for files (default: ACCESS-ESM1.6 Dec spin-up path)
+        target_folders: Target folder pattern relative to root_folder (default: output40[0-9]/ocean/)
+        model_id: Model identifier for loading mappings (default: ACCESS-ESM1.6)
+    
+    Returns:
+        List of absolute paths to matching ocean files
+        
+    Raises:
+        ValueError: If compound_name format is invalid
+        FileNotFoundError: If root directory doesn't exist
+        
+    Examples:
+        >>> # Find ocean salinity files
+        >>> files = get_monthly_ocean_files("Omon.so")
+        >>> print(f"Found {len(files)} salinity files")
+        
+        >>> # Find ocean cell area files (different location)
+        >>> area_files = get_monthly_ocean_files(
+        ...     "Ofx.areacello",
+        ...     target_folders="output401/ocean/"
+        ... )
+    """
+    import glob
+    
+    # Validate inputs
+    if not compound_name or "." not in compound_name:
+        raise ValueError(
+            f"Invalid compound_name format: {compound_name}. Expected 'table.variable' format."
+        )
+
+    # Extract variable name from compound name
+    try:
+        table_name, variable_name = compound_name.split(".", 1)
+    except ValueError:
+        raise ValueError(
+            f"Invalid compound_name format: {compound_name}. Expected 'table.variable' format."
+        )
+
+    # Check if root folder exists
+    root_path = Path(root_folder)
+    if not root_path.exists():
+        raise FileNotFoundError(f"Root folder does not exist: {root_folder}")
+
+    # Load variable mappings
+    try:
+        mapping = load_model_mappings(compound_name, model_id)
+    except Exception as e:
+        warnings.warn(f"Could not load mapping for {compound_name}: {e}")
+        return []
+
+    if not mapping:
+        warnings.warn(f"No mapping found for {compound_name}")
+        return []
+
+    # Get model variables from mapping
+    model_variables = mapping[variable_name].get("model_variables", [])
+    if not model_variables:
+        warnings.warn(f"No model variables found in mapping for {compound_name}")
+        return []
+
+    # Search for files
+    files_found = []
+    search_pattern_base = str(root_path / target_folders)
+
+    for model_variable in model_variables:
+        # Ocean files typically have pattern: *-{model_variable}-1monthly-mean*.nc
+        # For fixed fields, pattern might be different (e.g., ocean-2d-area_t.nc)
+        if table_name == "Ofx":
+            # Fixed fields have different naming patterns
+            filename_patterns = [
+                f"*{model_variable}*.nc",  # General pattern for fixed fields
+                f"ocean-*-{model_variable}.nc",  # More specific ocean pattern
+            ]
+        else:
+            # Monthly mean files
+            filename_patterns = [f"*-{model_variable}-1monthly-mean*.nc"]
+
+        for filename_pattern in filename_patterns:
+            search_pattern = search_pattern_base + "/" + filename_pattern
+
+            try:
+                matching_files = glob.glob(search_pattern)
+                files_found.extend(matching_files)
+
+                if not matching_files and len(filename_patterns) == 1:
+                    # Only warn if no alternatives were tried
+                    warnings.warn(
+                        f"No files found for model variable '{model_variable}' with pattern: {search_pattern}",
+                        UserWarning
+                    )
+
+            except Exception as e:
+                warnings.warn(f"Error searching for files with pattern '{search_pattern}': {e}")
+
+    # Remove duplicates and sort
+    files_found = sorted(list(set(files_found)))
+
+    if not files_found:
+        warnings.warn(f"No ocean files found for {compound_name} in {search_pattern_base}")
+    
+    return files_found
+
+
 class VariableMapping:
     """
     A wrapper class for variable mappings that provides enhanced display functionality
