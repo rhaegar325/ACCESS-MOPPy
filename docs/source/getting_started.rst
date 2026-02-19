@@ -91,6 +91,42 @@ You can also provide additional metadata such as `experiment_id`, `source_id`, `
        parent_info=parent_experiment_config # <-- This is optional, can be skipped if not needed
    )
 
+Exploring Variable Mappings
+---------------------------
+
+ACCESS-MOPPy provides an enhanced variable mapping display that helps you understand how your raw model variables are mapped to CMIP-compliant variables. The `variable_mapping` attribute provides a rich, interactive display in Jupyter notebooks that shows:
+
+- Variable metadata (CF standard names, units, dimensions)
+- Mapping completeness and validation status  
+- Model-specific mapping information
+- Easy-to-read tabular format with color coding
+
+.. code-block:: python
+
+   # Display the variable mapping with enhanced formatting
+   cmoriser.variable_mapping
+
+The variable mapping display shows:
+
+- **Variable Name**: The CMIP variable name (e.g., rsds - surface downwelling shortwave flux)
+- **CF Standard Name**: The Climate and Forecast conventions standard name
+- **Units**: Expected units for the CMIP-compliant variable  
+- **Dimensions**: How the data dimensions map between raw and CMIP formats
+- **Model Info**: Shows the ACCESS model version used for this mapping
+
+You can also access the raw mapping data programmatically:
+
+.. code-block:: python
+
+   # Access the raw mapping dictionary if needed for programmatic use
+   print("Variable:", list(cmoriser.variable_mapping.keys()))
+   print("CF Standard Name:", cmoriser.variable_mapping['rsds']['CF standard Name'])
+   print("Units:", cmoriser.variable_mapping['rsds']['units'])
+   print("Compound name:", cmoriser.variable_mapping.compound_name)
+   print("Model ID:", cmoriser.variable_mapping.model_id)
+
+The VariableMapping class acts as both a dictionary-like interface for programmatic access and provides rich visual feedback in Jupyter environments to help users understand and validate their variable mappings before processing.
+
 Running the CMORiser
 --------------------
 
