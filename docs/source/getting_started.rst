@@ -97,7 +97,7 @@ Exploring Variable Mappings
 ACCESS-MOPPy provides an enhanced variable mapping display that helps you understand how your raw model variables are mapped to CMIP-compliant variables. The `variable_mapping` attribute provides a rich, interactive display in Jupyter notebooks that shows:
 
 - Variable metadata (CF standard names, units, dimensions)
-- Mapping completeness and validation status  
+- Mapping completeness and validation status
 - Model-specific mapping information
 - Easy-to-read tabular format with color coding
 
@@ -110,7 +110,7 @@ The variable mapping display shows:
 
 - **Variable Name**: The CMIP variable name (e.g., rsds - surface downwelling shortwave flux)
 - **CF Standard Name**: The Climate and Forecast conventions standard name
-- **Units**: Expected units for the CMIP-compliant variable  
+- **Units**: Expected units for the CMIP-compliant variable
 - **Dimensions**: How the data dimensions map between raw and CMIP formats
 - **Model Info**: Shows the ACCESS model version used for this mapping
 
@@ -171,7 +171,7 @@ The CMIP7 format follows the pattern: ``realm.variable.operation.frequency.domai
 This provides more explicit information about:
 
 - **Realm**: Model component (atmos, ocean, land, etc.)
-- **Variable**: The physical quantity  
+- **Variable**: The physical quantity
 - **Operation**: Temporal and spatial processing applied
 - **Frequency**: Data output frequency
 - **Domain**: Spatial domain specification
@@ -187,10 +187,10 @@ Here's how to use CMIP7 compound names with ACCESS-MOPPy:
    cmip7_cmoriser = ACCESS_ESM_CMORiser(
        input_data=files,  # Can reuse the same atmospheric files
        compound_name="atmos.tas.tavg-h2m-hxy-u.mon.glb",  # CMIP7 full branded name
-       experiment_id="piControl-spinup", 
+       experiment_id="piControl-spinup",
        source_id="pcmdi-test-1-0",  # CMIP7 test source identifier
        variant_label="r1i1p1f1",
-       grid_label="gn", 
+       grid_label="gn",
        activity_id="CMIP",
        parent_info=parent_experiment_config,
        cmip_version="CMIP7"  # Explicit CMIP7 support
@@ -227,7 +227,7 @@ The table below shows the key differences between CMIP6 and CMIP7 compound name 
 **CMIP7 Compound Name Breakdown:**
 
 - ``atmos``: Atmospheric realm
-- ``tas``: Near-surface air temperature  
+- ``tas``: Near-surface air temperature
 - ``tavg-h2m-hxy-u``: Time-averaged, 2-meter height, horizontal grid, unstructured
 - ``mon``: Monthly frequency
 - ``glb``: Global domain
