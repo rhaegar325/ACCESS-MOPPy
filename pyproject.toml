@@ -80,7 +80,8 @@ include-package-data = true
 access_moppy = ["*.yml", "mappings/*.json",
                 "vocabularies/**/*",
                 "dashboard/*.py", "examples/*.yml",
-                "templates/*.jinja2", "templates/*.yaml"
+                "templates/*.jinja2", "templates/*.yaml",
+                "ressources/**/*"
 ]
 
 [tool.versioneer]
