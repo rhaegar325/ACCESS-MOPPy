@@ -47,6 +47,7 @@ CMOR_TABLES = [
     ("day", "ACCESS-ESM1.6", "CMIP6_day.json"),
     ("Eday", "ACCESS-ESM1.6", "CMIP6_Eday.json"),
     ("CFday", "ACCESS-ESM1.6", "CMIP6_CFday.json"),
+    ("SImon", "ACCESS-ESM1.6", "CMIP6_SImon.json"),
 ]
 
 
@@ -80,6 +81,12 @@ class TestFullCMORIntegration:
             if om3_files:
                 return om3_files[:1]  # Return first available ocean test file
             return []
+
+        if table_name == "SImon":
+            return [
+                DATA_DIR / "esm1-6/ice/iceh-1monthly-mean_3114-01.nc",
+                DATA_DIR / "esm1-6/ice/iceh-1monthly-mean_3114-02.nc",
+            ]
 
         if "3hr" in table_name.lower():
             # Use 3-hourly files for 3hr tables
