@@ -46,7 +46,7 @@ export TMPDIR=${PBS_JOBFS}/tmp
 mkdir -p "${TMPDIR}"
 
 # 创建日志目录（与 PBS 输出路径一致）
-mkdir -p logs
+mkdir -p "${PBS_O_WORKDIR}/logs"
 
 echo "========================================================"
 echo "  作业开始: $(date)"
@@ -54,8 +54,8 @@ echo "  节点: ${HOSTNAME}"
 echo "  CPUs: ${PBS_NCPUS}  内存: ${PBS_MEM_GB}GB"
 echo "========================================================"
 
-# 运行 CMORisation 脚本（脚本与 PBS 文件位于同一目录）
-python "$(dirname "$0")/cmorise_tipmip.py"
+# 运行 CMORisation 脚本
+python "${PBS_O_WORKDIR}/cmorise_tipmip.py"
 
 EXIT_CODE=$?
 
