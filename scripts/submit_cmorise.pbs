@@ -16,8 +16,8 @@
 
 # ── 请修改以下两行 ──────────────────────────────────────────
 # 替换 <your_project> 为你的 Gadi 项目编号（如 y99）
-#PBS -P y99
-#PBS -l storage=gdata/y99+scratch/y99
+#PBS -P tm70
+#PBS -l storage=gdata/tm70+scratch/tm70+gdata/xp65
 # ───────────────────────────────────────────────────────────
 
 #PBS -o logs/cmorise_tipmip.out
