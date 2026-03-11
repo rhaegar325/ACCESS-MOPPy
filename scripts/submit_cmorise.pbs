@@ -1,0 +1,67 @@
+#!/bin/bash
+#
+#  PBS 提交脚本 —— tipmipGr3b CMORisation
+#
+#  提交方式:
+#      qsub submit_cmorise.pbs
+#
+#  ──────────────────────────────────────────────────────────
+#PBS -N moppy_cmorise_tipmip
+#PBS -q normal
+#PBS -l ncpus=8
+#PBS -l mem=32GB
+#PBS -l walltime=06:00:00
+#PBS -l jobfs=50GB
+#PBS -l wd
+
+# ── 请修改以下两行 ──────────────────────────────────────────
+# 替换 <your_project> 为你的 Gadi 项目编号（如 y99）
+#PBS -P y99
+#PBS -l storage=gdata/y99+scratch/y99
+# ───────────────────────────────────────────────────────────
+
+#PBS -o logs/cmorise_tipmip.out
+#PBS -e logs/cmorise_tipmip.err
+
+set -euo pipefail
+
+# ── 环境加载（选择适合你环境的方式） ────────────────────────
+#
+# 方式 A：使用 NCI ACCESS-NRI conda 环境（推荐）
+module use /g/data/xp65/public/modules
+module load conda/access-med
+conda activate moppy  # 或 access-rose-cylc，视安装而定
+#
+# 方式 B：使用自定义 conda 环境（取消注释并修改路径）
+# source /home/<user>/miniforge3/bin/activate
+# conda activate moppy_env
+# ───────────────────────────────────────────────────────────
+
+# 供 MOPPy 模板使用的内存信息
+export PBS_MEM_GB=32
+export OMP_NUM_THREADS=1
+
+# 使用 jobfs 作为临时目录，避免 /scratch 写放大
+export TMPDIR=${PBS_JOBFS}/tmp
+mkdir -p "${TMPDIR}"
+
+# 创建日志目录（与 PBS 输出路径一致）
+mkdir -p logs
+
+echo "========================================================"
+echo "  作业开始: $(date)"
+echo "  节点: ${HOSTNAME}"
+echo "  CPUs: ${PBS_NCPUS}  内存: ${PBS_MEM_GB}GB"
+echo "========================================================"
+
+# 运行 CMORisation 脚本（脚本与 PBS 文件位于同一目录）
+python "$(dirname "$0")/cmorise_tipmip.py"
+
+EXIT_CODE=$?
+
+echo "========================================================"
+echo "  作业结束: $(date)"
+echo "  退出码: ${EXIT_CODE}"
+echo "========================================================"
+
+exit ${EXIT_CODE}
