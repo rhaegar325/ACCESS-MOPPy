@@ -350,16 +350,22 @@ class CMIP6_CMORiser:
                         f"Proceeding with concatenation but results may be inconsistent."
                     )
 
-            self.ds = xr.open_mfdataset(
-                self.input_paths,
-                combine="nested",  # avoids costly dimension alignment
-                concat_dim="time",
-                engine="netcdf4",
-                decode_cf=False,
-                chunks={},
-                preprocess=_preprocess,
-                parallel=True,  # <--- enables concurrent preprocessing
-            )
+            # Increase xarray's file handle LRU cache to avoid "NetCDF: Not a
+            # valid ID" errors when opening large numbers of files in parallel.
+            # The default maxsize (128) is easily exceeded with hundreds of
+            # monthly files; set it to at least 2× the number of input files.
+            _required_cache = max(128, len(self.input_paths) * 2)
+            with xr.set_options(file_cache_maxsize=_required_cache):
+                self.ds = xr.open_mfdataset(
+                    self.input_paths,
+                    combine="nested",  # avoids costly dimension alignment
+                    concat_dim="time",
+                    engine="netcdf4",
+                    decode_cf=False,
+                    chunks={},
+                    preprocess=_preprocess,
+                    parallel=True,  # <--- enables concurrent preprocessing
+                )
 
         # Apply temporal resampling if enabled and needed
         if self.enable_resampling and self.compound_name:
