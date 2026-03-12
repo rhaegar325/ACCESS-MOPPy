@@ -7,19 +7,11 @@
 
 或作为 PBS 任务运行（见同目录下的 submit_cmorise_ocean.pbs）。
 
-目录结构:
-    INPUT_DIR/
-        ocean-3d-pot_temp-1monthly-mean-ym/
-            ocean-3d-pot_temp-1monthly-mean-ym_YYYY_MM.nc
-            ...
-        ocean-3d-salt-1monthly-mean-ym/
-            ocean-3d-salt-1monthly-mean-ym_YYYY_MM.nc
-            ...
-        ...
-
-文件命名格式: {subdir_name}_YYYY_MM.nc
+文件命名格式: {prefix}_YYYY_MM.nc（直接位于 INPUT_DIR 下）
     YYYY = 4 位年份（含前导零，如 0111 表示第 111 年）
     MM   = 2 位月份
+    例: ocean-3d-pot_temp-1monthly-mean-ym_0111_01.nc
+        ocean-3d-salt-1monthly-mean-ym_0326_06.nc
 """
 
 import json
@@ -54,18 +46,16 @@ VARIANT_LABEL = "r1i1p1f1"
 GRID_LABEL    = "gn"
 ACTIVITY_ID   = "TIPMIP"
 
-# ── 变量 → 输入子目录映射 ─────────────────────────────────────────────────────
+# ── 变量 → 文件前缀映射 ──────────────────────────────────────────────────────
 #
-# 每个 CMIP6 变量所需的子目录名列表（相对于 INPUT_DIR）。
-# 子目录内的文件命名格式: {subdir_name}_YYYY_MM.nc
+# 每个 CMIP6 变量所需的文件前缀列表。文件直接位于 INPUT_DIR 下，
+# 命名格式: {prefix}_YYYY_MM.nc
 #
-# 单个子目录：直接将文件列表传给 CMORiser（list[Path]）。
-# 多个子目录：按 (year, month) 对齐后 xr.merge 合并为 Dataset 再传入。
+# 单个前缀：直接将文件列表传给 CMORiser（list[Path]）。
+# 多个前缀：按 (year, month) 对齐后 xr.merge 合并为 Dataset 再传入。
 #
 # 注意:
-#   sos      → surface_salt 目录（xarray 内部变量名仍为 sss，需与 MOPPy
-#              mapping 中 "sos": {"model_variables": ["sss"]} 一致；
-#              若实际变量名为 surface_salt，请将 MOPPy mapping 也对应修改）
+#   sos      → 暂搁置，内部变量名（sss vs surface_salt）待确认
 #   msftyz / msftmz → ty_trans_submeso 仅有年均输出，月均处理时跳过，
 #              只使用 ty_trans + ty_trans_gm
 VARIABLE_FILE_DIRS: dict[str, list[str]] = {
@@ -117,24 +107,23 @@ def parse_year_from_filename(filename: str) -> int | None:
     return None
 
 
-def get_files_in_subdir(
-    subdir_name: str,
+def get_files_by_prefix(
+    prefix: str,
     year_start: int,
     year_end: int,
 ) -> list[Path]:
     """
-    返回 INPUT_DIR/{subdir_name}/ 下属于 [year_start, year_end] 的文件列表，
-    按文件名（时间）顺序排序。
+    在 INPUT_DIR 下直接查找以 prefix 开头的月均文件，
+    过滤至 [year_start, year_end] 年份范围，按文件名排序返回。
 
-    文件命名格式: {subdir_name}_YYYY_MM.nc
+    文件命名格式: {prefix}_YYYY_MM.nc（直接位于 INPUT_DIR 下）
     """
-    subdir = INPUT_DIR / subdir_name
-    if not subdir.is_dir():
+    all_files = sorted(INPUT_DIR.glob(f"{prefix}_????_??.nc"))
+    if not all_files:
         raise FileNotFoundError(
-            f"子目录不存在: {subdir}\n"
-            f"请检查 INPUT_DIR 和 VARIABLE_FILE_DIRS 中的目录名。"
+            f"未找到任何文件，glob 模式: {INPUT_DIR}/{prefix}_????_??.nc\n"
+            f"请检查 INPUT_DIR 和 VARIABLE_FILE_DIRS 中的前缀名。"
         )
-    all_files = sorted(subdir.glob(f"{subdir_name}_????_??.nc"))
     return [
         f for f in all_files
         if (y := parse_year_from_filename(f.name)) is not None
@@ -150,18 +139,18 @@ def build_input_for_variable(
     """
     根据 compound_name 构建传给 ACCESS_ESM_CMORiser 的 input_data。
 
-    单子目录 → 返回 (list[Path], n_files)
-    多子目录 → 各子目录文件按 (year, month) 对齐后 xr.merge，
-               返回 (xr.Dataset, n_timesteps)
+    单前缀 → 返回 (list[Path], n_files)
+    多前缀 → 各前缀文件按 (year, month) 对齐后 xr.merge，
+             返回 (xr.Dataset, n_timesteps)
     """
-    subdirs = VARIABLE_FILE_DIRS[compound_name]
+    prefixes = VARIABLE_FILE_DIRS[compound_name]
 
-    # ── 单子目录：直接返回文件列表 ────────────────────────────────────────────
-    if len(subdirs) == 1:
-        files = get_files_in_subdir(subdirs[0], year_start, year_end)
+    # ── 单前缀：直接返回文件列表 ──────────────────────────────────────────────
+    if len(prefixes) == 1:
+        files = get_files_by_prefix(prefixes[0], year_start, year_end)
         return files, len(files)
 
-    # ── 多子目录：按 (year, month) 对齐后合并 ────────────────────────────────
+    # ── 多前缀：按 (year, month) 对齐后合并 ──────────────────────────────────
     import xarray as xr
 
     def timestamp_map(files: list[Path]) -> dict[tuple[int, int], Path]:
@@ -173,8 +162,8 @@ def build_input_for_variable(
         return mapping
 
     maps = {
-        sd: timestamp_map(get_files_in_subdir(sd, year_start, year_end))
-        for sd in subdirs
+        p: timestamp_map(get_files_by_prefix(p, year_start, year_end))
+        for p in prefixes
     }
 
     common_timestamps = sorted(
@@ -182,16 +171,16 @@ def build_input_for_variable(
     )
     if not common_timestamps:
         raise FileNotFoundError(
-            f"{compound_name} 所需的各子目录在年份 {year_start}–{year_end} "
+            f"{compound_name} 所需的各文件序列在年份 {year_start}–{year_end} "
             f"内无公共时间步，请检查文件是否完整。\n"
-            f"  子目录: {subdirs}"
+            f"  前缀: {prefixes}"
         )
 
     per_step = []
     for ym in common_timestamps:
         step_ds = xr.merge([
-            xr.open_dataset(str(maps[sd][ym]), decode_cf=False)
-            for sd in subdirs
+            xr.open_dataset(str(maps[p][ym]), decode_cf=False)
+            for p in prefixes
         ])
         per_step.append(step_ds)
 
@@ -229,10 +218,7 @@ def cmorise_variable(compound_name: str, output_dir: Path) -> dict:
 
         label = "个文件" if isinstance(input_data, list) else "个时间步（合并数据集）"
         print(f"  输入: {n} {label}")
-        if isinstance(input_data, list):
-            print(f"  目录: {VARIABLE_FILE_DIRS[compound_name][0]}")
-        else:
-            print(f"  目录: {', '.join(VARIABLE_FILE_DIRS[compound_name])}")
+        print(f"  前缀: {', '.join(VARIABLE_FILE_DIRS[compound_name])}")
 
         # list[Path] → list[str]；xr.Dataset → 直接传入
         cmoriser_input = [str(f) for f in input_data] if isinstance(input_data, list) \
@@ -301,31 +287,31 @@ def main() -> None:
     print("=" * 60)
     print("  MOPPy 批量 CMORisation — tipmipGr3b 海洋变量")
     print("=" * 60)
-    print(f"  输入根目录 : {INPUT_DIR}")
+    print(f"  输入目录   : {INPUT_DIR}")
     print(f"  输出目录   : {OUTPUT_DIR}")
     print(f"  年份范围   : 第 {YEAR_START} 年 — 第 {YEAR_END} 年")
     print(f"  变量列表   : {', '.join(VARIABLES)}")
     print()
 
-    # 快速验证：检查第一个变量的子目录和文件
-    first_var   = VARIABLES[0]
-    first_subdir = VARIABLE_FILE_DIRS[first_var][0]
+    # 快速验证：检查第一个变量的文件前缀
+    first_var    = VARIABLES[0]
+    first_prefix = VARIABLE_FILE_DIRS[first_var][0]
     try:
-        probe_files = get_files_in_subdir(first_subdir, YEAR_START, YEAR_END)
+        probe_files = get_files_by_prefix(first_prefix, YEAR_START, YEAR_END)
     except FileNotFoundError as e:
         print(f"错误：{e}", file=sys.stderr)
         sys.exit(1)
 
     if not probe_files:
         print(
-            f"错误：子目录 {first_subdir} 中未找到年份 {YEAR_START}–{YEAR_END} 的文件！\n"
-            f"  预期文件名格式: {first_subdir}_YYYY_MM.nc\n"
+            f"错误：前缀 {first_prefix} 在年份 {YEAR_START}–{YEAR_END} 内未找到文件！\n"
+            f"  预期文件名格式: {first_prefix}_YYYY_MM.nc\n"
             f"请检查 YEAR_START / YEAR_END 配置是否正确。",
             file=sys.stderr,
         )
         sys.exit(1)
 
-    print(f"  文件探测通过（{first_subdir}: {len(probe_files)} 个文件）")
+    print(f"  文件探测通过（{first_prefix}: {len(probe_files)} 个文件）")
     print(f"  首个文件: {probe_files[0].name}")
     print(f"  末个文件: {probe_files[-1].name}")
     print()
