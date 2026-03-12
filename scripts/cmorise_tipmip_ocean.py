@@ -78,9 +78,7 @@ VARIABLE_FILE_DIRS: dict[str, list[str]] = {
     "Omon.so": [
         "ocean-3d-salt-1monthly-mean-ym",
     ],
-    "Omon.sos": [
-        "ocean-2d-surface_salt-1monthly-mean-ym",   # ⚠ 确认内部变量名是否为 sss
-    ],
+    # "Omon.sos": ["ocean-2d-surface_salt-1monthly-mean-ym"],  # 暂搁置：内部变量名待确认
     "Omon.uo": [
         "ocean-3d-u-1monthly-mean-ym",
     ],
