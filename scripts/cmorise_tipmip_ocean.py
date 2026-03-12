@@ -7,15 +7,19 @@
 
 或作为 PBS 任务运行（见同目录下的 submit_cmorise_ocean.pbs）。
 
-文件命名格式: {category}-{dims}-{varname}-1monthly-mean-ym_YYYY_MM.nc
-    例: ocean-3d-salt-1monthly-mean-ym_0326_01.nc  → salt，第 326 年 1 月
-        ocean-2d-mld-1monthly-mean-ym_0111_06.nc   → mld，第 111 年 6 月
-    YYYY = 4 位年份（含前导零），MM = 2 位月份
+目录结构:
+    INPUT_DIR/
+        ocean-3d-pot_temp-1monthly-mean-ym/
+            ocean-3d-pot_temp-1monthly-mean-ym_YYYY_MM.nc
+            ...
+        ocean-3d-salt-1monthly-mean-ym/
+            ocean-3d-salt-1monthly-mean-ym_YYYY_MM.nc
+            ...
+        ...
 
-与大气脚本的关键区别:
-    海洋输出每个 model variable 独立存放在各自的文件序列中。
-    因此对每个 CMIP6 变量，本脚本会按其所需的 model variable 名
-    分别定位文件，再合并后传入 ACCESS_ESM_CMORiser。
+文件命名格式: {subdir_name}_YYYY_MM.nc
+    YYYY = 4 位年份（含前导零，如 0111 表示第 111 年）
+    MM   = 2 位月份
 """
 
 import json
@@ -30,7 +34,7 @@ from pathlib import Path
 #  用户配置区 — 请根据实际情况修改
 # =============================================================================
 
-# 输入数据目录（包含海洋月均 .nc 文件）
+# 输入数据根目录（包含各变量子目录）
 INPUT_DIR = Path(
     "/g/data/y99/lcm561/access-esm/archive"
     "/tipmipGr3b-ffdbf476/history/ocn"
@@ -43,10 +47,6 @@ OUTPUT_DIR = Path("/scratch/tm70/yz9299/moppy_output_tipmip/tipmipGr3b_ocean")
 YEAR_START = 111
 YEAR_END   = 210
 
-# 从文件名中提取年份的正则
-# 匹配结尾 _YYYY_MM.nc，其中 YYYY 为 4 位年份
-YEAR_REGEX = r"_(\d{4})_\d{2}\.nc$"
-
 # CMIP6 实验元数据
 EXPERIMENT_ID = "tipmip"
 SOURCE_ID     = "ACCESS-ESM1-6"
@@ -54,61 +54,94 @@ VARIANT_LABEL = "r1i1p1f1"
 GRID_LABEL    = "gn"
 ACTIVITY_ID   = "TIPMIP"
 
-# ── 变量 → model variable 文件名关键词映射 ───────────────────────────────────
+# ── 变量 → 输入子目录映射 ─────────────────────────────────────────────────────
 #
-# 每个条目对应一个 CMIP6 变量所需的 model variable 名列表。
-# 脚本会用这些名称在 INPUT_DIR 中 glob 文件（匹配 *-{name}-* 片段）。
+# 每个 CMIP6 变量所需的子目录名列表（相对于 INPUT_DIR）。
+# 子目录内的文件命名格式: {subdir_name}_YYYY_MM.nc
 #
-# 需要多个 model variable 的变量（msftyz / msftmz）：
-#   文件会按 (year, month) 对齐后合并为单个 xr.Dataset 再传给 CMORiser。
+# 单个子目录：直接将文件列表传给 CMORiser（list[Path]）。
+# 多个子目录：按 (year, month) 对齐后 xr.merge 合并为 Dataset 再传入。
 #
-# ⚠ 如果实际文件名中的变量名片段与此不同，请在此处修改对应的列表。
-VARIABLE_MODEL_VARS: dict[str, list[str]] = {
-    "Omon.thetao":  ["pot_temp"],
-    "Omon.tos":     ["surface_temp"],
-    "Omon.so":      ["salt"],
-    "Omon.sos":     ["sss"],
-    "Omon.uo":      ["u"],
-    "Omon.vo":      ["v"],
-    "Omon.zos":     ["sea_level"],
-    "Omon.mlotst":  ["mld"],
-    "Omon.msftyz":  ["ty_trans", "ty_trans_gm", "ty_trans_submeso"],
-    "Omon.msftmz":  ["ty_trans", "ty_trans_gm", "ty_trans_submeso"],
+# 注意:
+#   sos      → surface_salt 目录（xarray 内部变量名仍为 sss，需与 MOPPy
+#              mapping 中 "sos": {"model_variables": ["sss"]} 一致；
+#              若实际变量名为 surface_salt，请将 MOPPy mapping 也对应修改）
+#   msftyz / msftmz → ty_trans_submeso 仅有年均输出，月均处理时跳过，
+#              只使用 ty_trans + ty_trans_gm
+VARIABLE_FILE_DIRS: dict[str, list[str]] = {
+    "Omon.thetao": [
+        "ocean-3d-pot_temp-1monthly-mean-ym",
+    ],
+    "Omon.tos": [
+        "ocean-2d-surface_temp-1monthly-mean-ym",
+    ],
+    "Omon.so": [
+        "ocean-3d-salt-1monthly-mean-ym",
+    ],
+    "Omon.sos": [
+        "ocean-2d-surface_salt-1monthly-mean-ym",   # ⚠ 确认内部变量名是否为 sss
+    ],
+    "Omon.uo": [
+        "ocean-3d-u-1monthly-mean-ym",
+    ],
+    "Omon.vo": [
+        "ocean-3d-v-1monthly-mean-ym",
+    ],
+    "Omon.zos": [
+        "ocean-2d-sea_level-1monthly-mean-ym",
+    ],
+    "Omon.mlotst": [
+        "ocean-2d-mld-1monthly-mean-ym",
+    ],
+    "Omon.msftyz": [
+        "ocean-3d-ty_trans-1monthly-mean-ym",
+        "ocean-3d-ty_trans_gm-1monthly-mean-ym",
+        # ty_trans_submeso 仅有年均，不纳入月均处理
+    ],
+    "Omon.msftmz": [
+        "ocean-3d-ty_trans-1monthly-mean-ym",
+        "ocean-3d-ty_trans_gm-1monthly-mean-ym",
+        # ty_trans_submeso 仅有年均，不纳入月均处理
+    ],
 }
 
 # 要处理的变量列表（顺序即处理顺序）
-VARIABLES = list(VARIABLE_MODEL_VARS.keys())
+VARIABLES = list(VARIABLE_FILE_DIRS.keys())
 
 # =============================================================================
 
 
 def parse_year_from_filename(filename: str) -> int | None:
-    """从文件名末尾的 _YYYY_MM.nc 提取 4 位年份并返回整数。"""
-    match = re.search(YEAR_REGEX, filename)
+    """从文件名末尾的 _YYYY_MM.nc 提取 4 位年份，返回整数。"""
+    match = re.search(r"_(\d{4})_\d{2}\.nc$", filename)
     if match:
         return int(match.group(1))
     return None
 
 
-def get_files_for_model_var(
-    model_var: str,
+def get_files_in_subdir(
+    subdir_name: str,
     year_start: int,
     year_end: int,
 ) -> list[Path]:
     """
-    在 INPUT_DIR 中查找包含指定 model variable 的文件，
-    过滤至 [year_start, year_end] 年份范围，按文件名排序返回。
+    返回 INPUT_DIR/{subdir_name}/ 下属于 [year_start, year_end] 的文件列表，
+    按文件名（时间）顺序排序。
 
-    glob 模式: *-{model_var}-*_????_??.nc
+    文件命名格式: {subdir_name}_YYYY_MM.nc
     """
-    pattern = f"*-{model_var}-*_????_??.nc"
-    all_files = sorted(INPUT_DIR.glob(pattern))
-    filtered = [
+    subdir = INPUT_DIR / subdir_name
+    if not subdir.is_dir():
+        raise FileNotFoundError(
+            f"子目录不存在: {subdir}\n"
+            f"请检查 INPUT_DIR 和 VARIABLE_FILE_DIRS 中的目录名。"
+        )
+    all_files = sorted(subdir.glob(f"{subdir_name}_????_??.nc"))
+    return [
         f for f in all_files
         if (y := parse_year_from_filename(f.name)) is not None
         and year_start <= y <= year_end
     ]
-    return filtered
 
 
 def build_input_for_variable(
@@ -119,23 +152,20 @@ def build_input_for_variable(
     """
     根据 compound_name 构建传给 ACCESS_ESM_CMORiser 的 input_data。
 
-    单 model variable  → 返回 (list[Path], n_files)
-    多 model variables → 按 (year, month) 对齐各文件序列，
-                         合并为 xr.Dataset，返回 (dataset, n_timesteps)
-
-    返回值为 (input_data, file_count)，其中 file_count 仅供日志展示。
+    单子目录 → 返回 (list[Path], n_files)
+    多子目录 → 各子目录文件按 (year, month) 对齐后 xr.merge，
+               返回 (xr.Dataset, n_timesteps)
     """
-    model_vars = VARIABLE_MODEL_VARS[compound_name]
+    subdirs = VARIABLE_FILE_DIRS[compound_name]
 
-    # ── 单变量：直接返回文件列表 ──────────────────────────────────────────────
-    if len(model_vars) == 1:
-        files = get_files_for_model_var(model_vars[0], year_start, year_end)
+    # ── 单子目录：直接返回文件列表 ────────────────────────────────────────────
+    if len(subdirs) == 1:
+        files = get_files_in_subdir(subdirs[0], year_start, year_end)
         return files, len(files)
 
-    # ── 多变量：按时间戳对齐后合并为 xr.Dataset ───────────────────────────────
+    # ── 多子目录：按 (year, month) 对齐后合并 ────────────────────────────────
     import xarray as xr
 
-    # 提取 (year, month) → Path 映射，每个 model variable 独立
     def timestamp_map(files: list[Path]) -> dict[tuple[int, int], Path]:
         mapping = {}
         for f in files:
@@ -144,27 +174,28 @@ def build_input_for_variable(
                 mapping[(int(m.group(1)), int(m.group(2)))] = f
         return mapping
 
-    maps = {mv: timestamp_map(get_files_for_model_var(mv, year_start, year_end))
-            for mv in model_vars}
+    maps = {
+        sd: timestamp_map(get_files_in_subdir(sd, year_start, year_end))
+        for sd in subdirs
+    }
 
-    # 取各变量时间步的交集（按排序顺序）
     common_timestamps = sorted(
         set.intersection(*(set(m.keys()) for m in maps.values()))
     )
     if not common_timestamps:
         raise FileNotFoundError(
-            f"变量 {compound_name} 所需的 model variables {model_vars} "
-            f"在年份 {year_start}–{year_end} 内无公共时间步，请检查文件是否完整。"
+            f"{compound_name} 所需的各子目录在年份 {year_start}–{year_end} "
+            f"内无公共时间步，请检查文件是否完整。\n"
+            f"  子目录: {subdirs}"
         )
 
-    # 逐时间步打开各 model variable 文件并合并
     per_step = []
     for ym in common_timestamps:
-        step_datasets = [
-            xr.open_dataset(str(maps[mv][ym]), decode_cf=False)
-            for mv in model_vars
-        ]
-        per_step.append(xr.merge(step_datasets))
+        step_ds = xr.merge([
+            xr.open_dataset(str(maps[sd][ym]), decode_cf=False)
+            for sd in subdirs
+        ])
+        per_step.append(step_ds)
 
     merged_ds = xr.concat(per_step, dim="time")
     return merged_ds, len(common_timestamps)
@@ -194,18 +225,20 @@ def cmorise_variable(compound_name: str, output_dir: Path) -> dict:
 
         if not n:
             raise FileNotFoundError(
-                f"未找到 {compound_name} 所需的任何输入文件，"
-                f"请检查 INPUT_DIR 和 VARIABLE_MODEL_VARS 配置。"
+                f"未找到 {compound_name} 的任何输入文件，"
+                f"请检查 INPUT_DIR 和 VARIABLE_FILE_DIRS 配置。"
             )
 
         label = "个文件" if isinstance(input_data, list) else "个时间步（合并数据集）"
         print(f"  输入: {n} {label}")
+        if isinstance(input_data, list):
+            print(f"  目录: {VARIABLE_FILE_DIRS[compound_name][0]}")
+        else:
+            print(f"  目录: {', '.join(VARIABLE_FILE_DIRS[compound_name])}")
 
         # list[Path] → list[str]；xr.Dataset → 直接传入
-        if isinstance(input_data, list):
-            cmoriser_input = [str(f) for f in input_data]
-        else:
-            cmoriser_input = input_data  # xr.Dataset
+        cmoriser_input = [str(f) for f in input_data] if isinstance(input_data, list) \
+                         else input_data
 
         cmoriser = ACCESS_ESM_CMORiser(
             input_data=cmoriser_input,
@@ -238,7 +271,7 @@ def cmorise_variable(compound_name: str, output_dir: Path) -> dict:
 
 
 def print_summary(results: list[dict]) -> None:
-    """打印格式化的结果汇总，并将详细报告写入 JSON 文件。"""
+    """打印结果汇总并写入 JSON 报告。"""
     successes = [r for r in results if r["status"] == "SUCCESS"]
     failures  = [r for r in results if r["status"] == "FAILED"]
 
@@ -270,30 +303,31 @@ def main() -> None:
     print("=" * 60)
     print("  MOPPy 批量 CMORisation — tipmipGr3b 海洋变量")
     print("=" * 60)
-    print(f"  输入目录 : {INPUT_DIR}")
-    print(f"  年份正则 : {YEAR_REGEX}")
-    print(f"  输出目录 : {OUTPUT_DIR}")
-    print(f"  年份范围 : 第 {YEAR_START} 年 — 第 {YEAR_END} 年")
-    print(f"  变量列表 : {', '.join(VARIABLES)}")
+    print(f"  输入根目录 : {INPUT_DIR}")
+    print(f"  输出目录   : {OUTPUT_DIR}")
+    print(f"  年份范围   : 第 {YEAR_START} 年 — 第 {YEAR_END} 年")
+    print(f"  变量列表   : {', '.join(VARIABLES)}")
     print()
 
-    # 快速验证：检查至少有一个变量能找到文件
-    first_var  = VARIABLES[0]
-    first_mvars = VARIABLE_MODEL_VARS[first_var]
-    probe_files = get_files_for_model_var(first_mvars[0], YEAR_START, YEAR_END)
+    # 快速验证：检查第一个变量的子目录和文件
+    first_var   = VARIABLES[0]
+    first_subdir = VARIABLE_FILE_DIRS[first_var][0]
+    try:
+        probe_files = get_files_in_subdir(first_subdir, YEAR_START, YEAR_END)
+    except FileNotFoundError as e:
+        print(f"错误：{e}", file=sys.stderr)
+        sys.exit(1)
+
     if not probe_files:
         print(
-            f"错误：在 {INPUT_DIR} 中未找到 '{first_mvars[0]}' 相关文件！\n"
-            f"  glob 模式: *-{first_mvars[0]}-*_????_??.nc\n"
-            f"  年份正则 : {YEAR_REGEX}\n"
-            f"请先运行:\n"
-            f"  ls {INPUT_DIR} | head -10\n"
-            f"确认文件名格式，再调整 YEAR_REGEX 和 VARIABLE_MODEL_VARS。",
+            f"错误：子目录 {first_subdir} 中未找到年份 {YEAR_START}–{YEAR_END} 的文件！\n"
+            f"  预期文件名格式: {first_subdir}_YYYY_MM.nc\n"
+            f"请检查 YEAR_START / YEAR_END 配置是否正确。",
             file=sys.stderr,
         )
         sys.exit(1)
 
-    print(f"  文件探测通过（{first_mvars[0]}: {len(probe_files)} 个文件）")
+    print(f"  文件探测通过（{first_subdir}: {len(probe_files)} 个文件）")
     print(f"  首个文件: {probe_files[0].name}")
     print(f"  末个文件: {probe_files[-1].name}")
     print()
