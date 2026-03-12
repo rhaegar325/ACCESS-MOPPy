@@ -1,0 +1,52 @@
+#!/bin/bash
+#
+#  PBS 提交脚本 —— tipmipGr3b 海洋变量 CMORisation
+#
+#  提交方式:
+#      qsub submit_cmorise_ocean.pbs
+#
+#  ──────────────────────────────────────────────────────────
+#PBS -N moppy_cmorise_ocean
+#PBS -q normal
+#PBS -l ncpus=8
+#PBS -l mem=64GB
+#PBS -l walltime=12:00:00
+#PBS -l jobfs=100GB
+#PBS -l wd
+#PBS -P tm70
+#PBS -l storage=gdata/tm70+scratch/tm70+gdata/y99+gdata/xp65
+# ───────────────────────────────────────────────────────────
+
+#PBS -o logs/cmorise_ocean.out
+#PBS -e logs/cmorise_ocean.err
+
+set -euo pipefail
+
+module use /g/data/xp65/public/modules
+module load conda/access-med
+conda activate moppy
+
+export PBS_MEM_GB=64
+export OMP_NUM_THREADS=1
+
+export TMPDIR=${PBS_JOBFS}/tmp
+mkdir -p "${TMPDIR}"
+
+mkdir -p "${PBS_O_WORKDIR}/logs"
+
+echo "========================================================"
+echo "  作业开始: $(date)"
+echo "  节点: ${HOSTNAME}"
+echo "  CPUs: ${PBS_NCPUS}  内存: ${PBS_MEM_GB}GB"
+echo "========================================================"
+
+python "${PBS_O_WORKDIR}/cmorise_tipmip_ocean.py"
+
+EXIT_CODE=$?
+
+echo "========================================================"
+echo "  作业结束: $(date)"
+echo "  退出码: ${EXIT_CODE}"
+echo "========================================================"
+
+exit ${EXIT_CODE}
