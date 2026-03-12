@@ -23,8 +23,13 @@
 set -euo pipefail
 
 module use /g/data/xp65/public/modules
-module load conda/access-med
-conda activate moppy
+module load conda/analysis3-26.02
+
+# analysis3-26.02 里的 netCDF4 编译时链接 OpenMPI 4.1+，
+# 但 Gadi 节点默认加载的是 4.0.x（libmpi_mpifh.so.40），
+# 缺少 ompi_instance_count 符号，导致 import netCDF4 失败。
+# 显式加载 4.1+ 可修复此问题。
+module load openmpi/4.1.2
 
 export PBS_MEM_GB=64
 export OMP_NUM_THREADS=1

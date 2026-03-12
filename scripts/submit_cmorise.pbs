@@ -25,17 +25,10 @@
 
 set -euo pipefail
 
-# ── 环境加载（选择适合你环境的方式） ────────────────────────
-#
-# 方式 A：使用 NCI ACCESS-NRI conda 环境（推荐）
 module use /g/data/xp65/public/modules
-module load conda/access-med
-conda activate moppy  # 或 access-rose-cylc，视安装而定
-#
-# 方式 B：使用自定义 conda 环境（取消注释并修改路径）
-# source /home/<user>/miniforge3/bin/activate
-# conda activate moppy_env
-# ───────────────────────────────────────────────────────────
+module load conda/analysis3-26.02
+# analysis3-26.02 的 netCDF4 需要 OpenMPI 4.1+（含 ompi_instance_count）
+module load openmpi/4.1.2
 
 # 供 MOPPy 模板使用的内存信息
 export PBS_MEM_GB=32
