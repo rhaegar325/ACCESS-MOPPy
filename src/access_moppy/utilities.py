@@ -10,6 +10,16 @@ import pandas as pd
 import xarray as xr
 from cftime import date2num, num2date
 
+_warned_messages: set = set()
+
+
+def _warn_once(message: str, category=UserWarning, stacklevel: int = 2) -> None:
+    """Emit a warning only once per session, regardless of call site."""
+    if message not in _warned_messages:
+        _warned_messages.add(message)
+        warnings.warn(message, category, stacklevel=stacklevel + 1)
+
+
 type_mapping = {
     "real": np.float32,
     "double": np.float64,
@@ -305,7 +315,7 @@ def _detect_frequency_from_concatenated_files(
 
     except Exception as e:
         # Fallback to individual file checking if concatenation fails
-        warnings.warn(
+        _warn_once(
             f"Multi-file concatenation failed ({e}), falling back to individual file analysis"
         )
         return _detect_frequency_from_individual_files(sampled_files, time_coord)
@@ -324,6 +334,8 @@ def _detect_frequency_from_individual_files(
 
     frequencies = []
     file_info = []
+    failed_files = []
+    error_files = []
 
     print(f"📁 Analyzing {len(file_paths)} files individually...")
 
@@ -336,10 +348,21 @@ def _detect_frequency_from_individual_files(
                     frequencies.append(freq)
                     file_info.append((file_path, freq))
                 else:
-                    warnings.warn(f"Could not detect frequency for file: {file_path}")
+                    failed_files.append(file_path)
         except Exception as e:
-            warnings.warn(f"Error processing file {file_path}: {e}")
+            error_files.append((file_path, str(e)))
             continue
+
+    if failed_files:
+        warnings.warn(
+            f"Could not detect frequency for {len(failed_files)} file(s); "
+            f"first: {failed_files[0]}"
+        )
+    if error_files:
+        warnings.warn(
+            f"Error processing {len(error_files)} file(s); "
+            f"first error in {error_files[0][0]}: {error_files[0][1]}"
+        )
 
     if not frequencies:
         raise ValueError("Could not detect frequency from any input files")
@@ -797,7 +820,8 @@ def detect_time_frequency_lazy(
                 # Convert to pandas datetime if possible for better frequency inference
                 if hasattr(dates[0], "strftime"):  # Standard datetime
                     time_index = pd.to_datetime(
-                        [d.strftime("%Y-%m-%d %H:%M:%S") for d in dates]
+                        [d.strftime("%Y-%m-%d %H:%M:%S") for d in dates],
+                        format="%Y-%m-%d %H:%M:%S",
                     )
                 else:  # cftime datetime
                     # For cftime objects, use a more manual approach
@@ -858,7 +882,7 @@ def detect_time_frequency_lazy(
             return pd.Timedelta(most_common_diff)
 
     except Exception as e:
-        warnings.warn(f"Could not detect frequency from time coordinate: {e}")
+        _warn_once(f"Could not detect frequency from time coordinate: {e}")
         return None
 
     return None
@@ -980,13 +1004,13 @@ def _detect_frequency_from_bounds(
             return frequency
 
         else:
-            warnings.warn(
+            _warn_once(
                 f"Time bounds variable '{bounds_name}' missing time units information"
             )
             return None
 
     except Exception as e:
-        warnings.warn(f"Error processing time bounds '{bounds_name}': {e}")
+        _warn_once(f"Error processing time bounds '{bounds_name}': {e}")
         return None
 
 
