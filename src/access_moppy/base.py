@@ -363,6 +363,7 @@ class CMIP6_CMORiser:
                     engine="netcdf4",
                     decode_cf=False,
                     chunks={},
+                    coords="minimal",  # coords absent from some files (e.g. 'pressure') won't raise ValueError
                     preprocess=_preprocess,
                     parallel=True,  # <--- enables concurrent preprocessing
                 )
