@@ -1,0 +1,63 @@
+#!/bin/bash
+#
+#  PBS 提交脚本 —— oceanbgc Oyr 变量 CMORisation
+#
+#  提交方式:
+#      qsub submit_cmorise_oceanbgc.pbs
+#
+#  ──────────────────────────────────────────────────────────
+#PBS -N moppy_cmorise_oceanbgc
+#PBS -q normal
+#PBS -l ncpus=8
+#PBS -l mem=64GB
+#PBS -l walltime=12:00:00
+#PBS -l jobfs=100GB
+#PBS -l wd
+#PBS -P tm70
+#PBS -l storage=gdata/tm70+scratch/tm70+gdata/y99+gdata/xp65
+# ───────────────────────────────────────────────────────────
+
+#PBS -o logs/cmorise_oceanbgc.out
+#PBS -e logs/cmorise_oceanbgc.err
+
+set -euo pipefail
+
+module use /g/data/xp65/public/modules
+module load conda/analysis3-26.02
+
+# analysis3-26.02 里的 netCDF4 编译时链接 OpenMPI 4.1+，
+# 但 Gadi 节点默认加载的是 4.0.x（libmpi_mpifh.so.40），
+# 缺少 ompi_instance_count 符号，导致 import netCDF4 失败。
+# 显式加载 4.1+ 可修复此问题。
+module load openmpi/4.1.2
+
+export PBS_MEM_GB=64
+export OMP_NUM_THREADS=1
+
+# Dask worker 数量与 PBS ncpus 对齐（脚本内 DASK_N_WORKERS=4，
+# 剩余 CPUs 供主进程及 I/O 使用）
+export DASK_DISTRIBUTED__WORKER__MEMORY__TARGET=0.85
+export DASK_DISTRIBUTED__WORKER__MEMORY__SPILL=0.90
+export DASK_DISTRIBUTED__WORKER__MEMORY__PAUSE=0.95
+
+export TMPDIR=${PBS_JOBFS}/tmp
+mkdir -p "${TMPDIR}"
+
+mkdir -p "${PBS_O_WORKDIR}/logs"
+
+echo "========================================================"
+echo "  作业开始: $(date)"
+echo "  节点: ${HOSTNAME}"
+echo "  CPUs: ${PBS_NCPUS}  内存: ${PBS_MEM_GB}GB"
+echo "========================================================"
+
+python "${PBS_O_WORKDIR}/cmorise_oceanbgc.py"
+
+EXIT_CODE=$?
+
+echo "========================================================"
+echo "  作业结束: $(date)"
+echo "  退出码: ${EXIT_CODE}"
+echo "========================================================"
+
+exit ${EXIT_CODE}
