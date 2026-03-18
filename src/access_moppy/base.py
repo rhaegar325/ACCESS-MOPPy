@@ -737,20 +737,20 @@ class CMORiser:
 
     def ensure_time_first_dimension(self):
         """
-        Ensure `time` is the first dimension in all CMORised data variables.
+        Ensure `time` is the first dimension in all CMORised variables.
 
         CMIP tables do not always list `time` first (e.g. `longitude latitude time`),
         but actual CMIP6 NetCDF files follow the NetCDF convention of placing the
         unlimited record dimension first: `(time, [vertical], lat, lon)`.
 
-        This method transposes any data variable whose leading dimension is not
-        `time` while preserving the relative order of the remaining dimensions.
-        Coordinate variables (1-D coords, bounds, scalar coords) are left untouched.
+        This method transposes any variable (data variable or coordinate variable)
+        whose leading dimension is not `time` while preserving the relative order of
+        the remaining dimensions.
         """
         if "time" not in self.ds.dims:
             return
 
-        for var in list(self.ds.data_vars):
+        for var in list(self.ds.variables):
             dims = list(self.ds[var].dims)
             if "time" in dims and dims[0] != "time":
                 new_order = ["time"] + [d for d in dims if d != "time"]
@@ -1285,9 +1285,11 @@ class CMORiser:
         self.standardize_missing_values()
         self.update_attributes()
         self.reorder()
-        # Ensure time is the leading dimension, matching NetCDF/CMIP6 conventions
         self.ensure_time_first_dimension()
         # Final rechunking before writing for optimal I/O performance
         if write_output:
             self.rechunk_dataset()
+            # Re-apply after rechunk_dataset() because xr.Dataset() reconstruction
+            # can reset per-variable dimension ordering to the Dataset's canonical order.
+            self.ensure_time_first_dimension()
             self.write()
