@@ -921,8 +921,13 @@ class CMORiser:
             for k, v in attrs.items():
                 dst.setncattr(k, v)
 
-            # Create dimensions
-            for dim, size in self.ds.sizes.items():
+            # Create dimensions - time must come first (NetCDF unlimited/CMIP6 convention)
+            dim_items = list(self.ds.sizes.items())
+            if "time" in self.ds.sizes:
+                dim_items = [("time", self.ds.sizes["time"])] + [
+                    (d, s) for d, s in dim_items if d != "time"
+                ]
+            for dim, size in dim_items:
                 if dim == "time":
                     dst.createDimension(dim, None)  # Unlimited dimension
                 else:

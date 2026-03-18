@@ -1562,3 +1562,106 @@ class TestEnsureTimeFirstDimension:
 
         assert cmoriser.ds["tas"].dims[0] == "time"
         assert cmoriser.ds["ua"].dims[0] == "time"
+
+
+class TestWriteTimeDimensionOrder:
+    """Integration tests: time must be first in the NetCDF file's dimension list."""
+
+    @pytest.fixture
+    def mock_vocab(self):
+        vocab = Mock()
+        vocab.get_required_attribute_names = Mock(return_value=[])
+        vocab.generate_filename = Mock(return_value="test_output.nc")
+        vocab.standardize_missing_values = Mock(side_effect=lambda x, **kw: x)
+        vocab.get_cmip_missing_value = Mock(return_value=1e20)
+        return vocab
+
+    @pytest.fixture
+    def mock_mapping(self):
+        return {
+            "CF standard Name": "air_temperature",
+            "units": "K",
+            "dimensions": {},
+            "positive": None,
+        }
+
+    @pytest.fixture
+    def cmoriser(self, mock_vocab, mock_mapping, tmp_path):
+        return CMORiser(
+            input_paths=["test.nc"],
+            output_path=str(tmp_path),
+            vocab=mock_vocab,
+            variable_mapping=mock_mapping,
+            compound_name="Amon.tas",
+            enable_chunking=False,
+        )
+
+    def _write(self, cmoriser):
+        with patch("access_moppy.base.psutil.virtual_memory") as m:
+            m.return_value = MagicMock(available=16 * 1024**3)
+            cmoriser.write()
+
+    @pytest.mark.unit
+    def test_time_first_in_file_dimensions_when_time_last_in_dataset(
+        self, cmoriser, tmp_path
+    ):
+        """time must be the first dimension in the NetCDF file even if dataset has it last."""
+        data = np.zeros((4, 5, 3))
+        cmoriser.ds = xr.Dataset(
+            {"tas": (["lat", "lon", "time"], data, {"_FillValue": 1e20})},
+            coords={
+                "time": ("time", np.arange(3), {"units": "days since 2000-01-01", "calendar": "standard"}),
+                "lat": ("lat", np.arange(4)),
+                "lon": ("lon", np.arange(5)),
+            },
+            attrs={"variable_id": "tas"},
+        )
+        cmoriser.cmor_name = "tas"
+        cmoriser.ensure_time_first_dimension()
+        self._write(cmoriser)
+
+        with nc.Dataset(tmp_path / "test_output.nc") as ds_nc:
+            dim_names = list(ds_nc.dimensions.keys())
+            assert dim_names[0] == "time", f"Expected time first, got: {dim_names}"
+
+    @pytest.mark.unit
+    def test_time_first_in_variable_dims_in_written_file(self, cmoriser, tmp_path):
+        """The 'tas' variable in the written file must have time as its first dim."""
+        data = np.zeros((4, 5, 3))
+        cmoriser.ds = xr.Dataset(
+            {"tas": (["lat", "lon", "time"], data, {"_FillValue": 1e20})},
+            coords={
+                "time": ("time", np.arange(3), {"units": "days since 2000-01-01", "calendar": "standard"}),
+                "lat": ("lat", np.arange(4)),
+                "lon": ("lon", np.arange(5)),
+            },
+            attrs={"variable_id": "tas"},
+        )
+        cmoriser.cmor_name = "tas"
+        cmoriser.ensure_time_first_dimension()
+        self._write(cmoriser)
+
+        with nc.Dataset(tmp_path / "test_output.nc") as ds_nc:
+            var_dims = list(ds_nc.variables["tas"].dimensions)
+            assert var_dims[0] == "time", f"Expected time first in var dims, got: {var_dims}"
+
+    @pytest.mark.unit
+    def test_time_already_first_unchanged_in_written_file(self, cmoriser, tmp_path):
+        """If time is already first in the dataset, write must still produce time-first file."""
+        data = np.zeros((3, 4, 5))
+        cmoriser.ds = xr.Dataset(
+            {"tas": (["time", "lat", "lon"], data, {"_FillValue": 1e20})},
+            coords={
+                "time": ("time", np.arange(3), {"units": "days since 2000-01-01", "calendar": "standard"}),
+                "lat": ("lat", np.arange(4)),
+                "lon": ("lon", np.arange(5)),
+            },
+            attrs={"variable_id": "tas"},
+        )
+        cmoriser.cmor_name = "tas"
+        cmoriser.ensure_time_first_dimension()
+        self._write(cmoriser)
+
+        with nc.Dataset(tmp_path / "test_output.nc") as ds_nc:
+            dim_names = list(ds_nc.dimensions.keys())
+            assert dim_names[0] == "time"
