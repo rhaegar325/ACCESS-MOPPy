@@ -2,6 +2,7 @@ import json
 import warnings
 from datetime import timedelta
 from importlib.resources import as_file, files
+from pathlib import Path
 from typing import Dict, List, Optional, Union
 
 import cftime
@@ -9,6 +10,17 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from cftime import date2num, num2date
+
+# Optional import for CMIP7 data request functionality
+try:
+    from data_request_api.content import dump_transformation as dt
+    from data_request_api.query import data_request as dr
+
+    DATA_REQUEST_API_AVAILABLE = True
+except ImportError:
+    dt = None
+    dr = None
+    DATA_REQUEST_API_AVAILABLE = False
 
 type_mapping = {
     "real": np.float32,
@@ -20,9 +32,80 @@ type_mapping = {
 }
 
 
+def _get_cmip7_to_cmip6_mapping(cmip7_compound_name: str) -> Optional[str]:
+    """
+    Get CMIP6 equivalent for a CMIP7 compound name, supporting exact matches and regex patterns.
+
+    Args:
+        cmip7_compound_name: CMIP7 compound name or regex pattern
+
+    Returns:
+        CMIP6 equivalent compound name, or None if no mapping exists
+    """
+    import json
+    import re
+
+    # Load the CMIP7 to CMIP6 mapping file
+    try:
+        mapping_dir = files("access_moppy.mappings")
+        mapping_file = "cmip7_to_cmip6_compound_name_mapping.json"
+
+        cmip7_to_cmip6_mapping = {}
+        for entry in mapping_dir.iterdir():
+            if entry.name == mapping_file:
+                with as_file(entry) as path:
+                    with open(path, "r", encoding="utf-8") as f:
+                        cmip7_to_cmip6_mapping = json.load(f)
+                break
+
+        if not cmip7_to_cmip6_mapping:
+            print(f"❌ CMIP7 to CMIP6 mapping file '{mapping_file}' not found")
+            return None
+
+    except Exception as e:
+        print(f"❌ Error loading CMIP7 to CMIP6 mapping: {e}")
+        return None
+
+    # Check for exact match first (case insensitive)
+    for key in cmip7_to_cmip6_mapping.keys():
+        if key.lower() == cmip7_compound_name.lower():
+            return cmip7_to_cmip6_mapping[key]
+
+    # Check if it's a regex pattern (contains special characters)
+    regex_chars = set("*+?[]{}()^$|\\")
+    if any(char in cmip7_compound_name for char in regex_chars):
+        # Handle as regex pattern
+        try:
+            pattern = re.compile(cmip7_compound_name, re.IGNORECASE)
+            matches = [
+                key for key in cmip7_to_cmip6_mapping.keys() if pattern.search(key)
+            ]
+
+            if len(matches) == 0:
+                print(
+                    f"❌ No CMIP7 variables found matching pattern '{cmip7_compound_name}'"
+                )
+                return None
+            elif len(matches) == 1:
+                return cmip7_to_cmip6_mapping[matches[0]]
+            else:
+                print(f"⚠️  Pattern '{cmip7_compound_name}' matches multiple variables:")
+                for match in sorted(matches):
+                    print(f"  - {match}")
+                print("Please specify one exactly.")
+                return None
+
+        except re.error as e:
+            print(f"❌ Invalid regex pattern '{cmip7_compound_name}': {e}")
+            return None
+
+    # Not found
+    return None
+
+
 def load_model_mappings(compound_name: str, model_id: str = None) -> Dict:
     """
-    Load Mappings for ACCESS models.
+    Load Mappings for ACCESS models for CMIP6.
 
     Args:
         compound_name: CMIP6 compound name (e.g., 'Amon.tas')
@@ -54,6 +137,7 @@ def load_model_mappings(compound_name: str, model_id: str = None) -> Dict:
                         "land",
                         "ocean",
                         "time_invariant",
+                        "sea_ice",
                     ]:
                         if (
                             component in all_mappings
@@ -68,6 +152,368 @@ def load_model_mappings(compound_name: str, model_id: str = None) -> Dict:
 
     # If model file not found or variable not found, return empty dict
     return {}
+
+
+def get_monthly_ocean_files(
+    compound_name: str,
+    root_folder: str = "/g/data/p73/archive/CMIP7/ACCESS-ESM1-6/spinup/Dec25-PI-control/",
+    target_folders: str = "output40[0-9]/ocean/",
+    model_id: str = "ACCESS-ESM1.6",
+) -> List[str]:
+    """
+    Find ocean data files for a given CMOR variable.
+
+    This utility function searches for ocean model output files that correspond to a
+    specific CMIP variable by using the variable mapping to identify the required
+    model variables and then searching for files with the ocean-specific naming pattern.
+
+    Args:
+        compound_name: CMOR compound name (e.g., 'Omon.so', 'Ofx.areacello')
+        root_folder: Root directory to search for files (default: ACCESS-ESM1.6 Dec spin-up path)
+        target_folders: Target folder pattern relative to root_folder (default: output40[0-9]/ocean/)
+        model_id: Model identifier for loading mappings (default: ACCESS-ESM1.6)
+
+    Returns:
+        List of absolute paths to matching ocean files
+
+    Raises:
+        ValueError: If compound_name format is invalid
+        FileNotFoundError: If root directory doesn't exist
+
+    Examples:
+        >>> # Find ocean salinity files
+        >>> files = get_monthly_ocean_files("Omon.so")
+        >>> print(f"Found {len(files)} salinity files")
+
+        >>> # Find ocean cell area files (different location)
+        >>> area_files = get_monthly_ocean_files(
+        ...     "Ofx.areacello",
+        ...     target_folders="output401/ocean/"
+        ... )
+    """
+    import glob
+
+    # Validate inputs
+    if not compound_name or "." not in compound_name:
+        raise ValueError(
+            f"Invalid compound_name format: {compound_name}. Expected 'table.variable' format."
+        )
+
+    # Extract variable name from compound name
+    try:
+        table_name, variable_name = compound_name.split(".", 1)
+    except ValueError:
+        raise ValueError(
+            f"Invalid compound_name format: {compound_name}. Expected 'table.variable' format."
+        )
+
+    # Check if root folder exists
+    root_path = Path(root_folder)
+    if not root_path.exists():
+        raise FileNotFoundError(f"Root folder does not exist: {root_folder}")
+
+    # Load variable mappings
+    try:
+        mapping = load_model_mappings(compound_name, model_id)
+    except Exception as e:
+        warnings.warn(f"Could not load mapping for {compound_name}: {e}")
+        return []
+
+    if not mapping:
+        warnings.warn(f"No mapping found for {compound_name}")
+        return []
+
+    # Get model variables from mapping
+    model_variables = mapping[variable_name].get("model_variables", [])
+    if not model_variables:
+        warnings.warn(f"No model variables found in mapping for {compound_name}")
+        return []
+
+    # Search for files
+    files_found = []
+    search_pattern_base = str(root_path / target_folders)
+
+    for model_variable in model_variables:
+        # Ocean files typically have pattern: *-{model_variable}-1monthly-mean*.nc
+        # For fixed fields, pattern might be different (e.g., ocean-2d-area_t.nc)
+        if table_name == "Ofx":
+            # Fixed fields have different naming patterns
+            filename_patterns = [
+                f"*{model_variable}*.nc",  # General pattern for fixed fields
+                f"ocean-*-{model_variable}.nc",  # More specific ocean pattern
+            ]
+        else:
+            # Monthly mean files
+            filename_patterns = [f"*-{model_variable}-1monthly-mean*.nc"]
+
+        for filename_pattern in filename_patterns:
+            search_pattern = search_pattern_base + "/" + filename_pattern
+
+            try:
+                matching_files = glob.glob(search_pattern)
+                files_found.extend(matching_files)
+
+                if not matching_files and len(filename_patterns) == 1:
+                    # Only warn if no alternatives were tried
+                    warnings.warn(
+                        f"No files found for model variable '{model_variable}' with pattern: {search_pattern}",
+                        UserWarning,
+                    )
+
+            except Exception as e:
+                warnings.warn(
+                    f"Error searching for files with pattern '{search_pattern}': {e}"
+                )
+
+    # Remove duplicates and sort
+    files_found = sorted(list(set(files_found)))
+
+    if not files_found:
+        warnings.warn(
+            f"No ocean files found for {compound_name} in {search_pattern_base}"
+        )
+
+    return files_found
+
+
+class VariableMapping:
+    """
+    A wrapper class for variable mappings that provides enhanced display functionality
+    for Jupyter notebooks and better user experience.
+    """
+
+    def __init__(self, mapping_dict: Dict, compound_name: str, model_id: str = None):
+        self._mapping = mapping_dict
+        self.compound_name = compound_name
+        self.model_id = model_id or "ACCESS-ESM1.6"
+        self.variable_name = (
+            compound_name.split(".")[1] if "." in compound_name else compound_name
+        )
+
+    def __getitem__(self, key):
+        return self._mapping[key]
+
+    def __contains__(self, key):
+        return key in self._mapping
+
+    def __iter__(self):
+        return iter(self._mapping)
+
+    def keys(self):
+        return self._mapping.keys()
+
+    def values(self):
+        return self._mapping.values()
+
+    def items(self):
+        return self._mapping.items()
+
+    def get(self, key, default=None):
+        return self._mapping.get(key, default)
+
+    @property
+    def mapping(self):
+        """Access the raw mapping dictionary."""
+        return self._mapping
+
+    def __repr__(self):
+        if not self._mapping:
+            return f"VariableMapping(empty - no mapping found for {self.compound_name})"
+        return f"VariableMapping({self.compound_name}, model={self.model_id})"
+
+    def _repr_html_(self):
+        """Rich HTML display for Jupyter notebooks (xarray-inspired theme)."""
+        if not self._mapping:
+            return f"""
+            <div style="border: 1px solid #ddd; margin: 10px 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 800px; display: inline-block;">
+                <div style="background: #f7f7f7; border-bottom: 1px solid #ddd; padding: 8px 12px;">
+                    <div style="font-weight: bold; color: #666;">❌ Variable Mapping</div>
+                    <div style="font-size: 0.9em; color: #999;">No mapping found</div>
+                </div>
+                <div style="padding: 12px;">
+                    <table style="width: 100%; font-size: 0.9em; border-collapse: collapse;">
+                        <tr><td style="padding: 3px 0; color: #666; font-weight: 500;">Compound Name:</td><td style="padding: 3px 0; font-family: monospace;">{self.compound_name}</td></tr>
+                        <tr><td style="padding: 3px 0; color: #666; font-weight: 500;">Model:</td><td style="padding: 3px 0; font-family: monospace;">{self.model_id}</td></tr>
+                    </table>
+                    <div style="margin-top: 8px; font-size: 0.85em; color: #888; font-style: italic;">
+                        Variable may not be available for this model or compound name may be incorrect.
+                    </div>
+                </div>
+            </div>
+            """
+
+        variable_info = list(self._mapping.values())[
+            0
+        ]  # Get the first (and typically only) variable
+
+        # Build HTML representation in xarray style
+        html = f"""
+        <div style="border: 1px solid #ddd; margin: 10px 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 800px; display: inline-block;">
+            <div style="background: #f7f7f7; border-bottom: 1px solid #ddd; padding: 8px 12px;">
+                <div style="font-weight: bold; color: #333;">ACCESS-MOPPy Variable Mapping</div>
+                <div style="font-size: 0.9em; color: #666; font-family: monospace;">{self.compound_name}</div>
+            </div>
+            <div style="padding: 12px;">
+                <table style="width: 100%; font-size: 0.9em; border-collapse: collapse;">
+        """
+
+        # Model info
+        html += f"""
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 6px 0; color: #666; font-weight: 500; width: 25%;">Model:</td>
+                        <td style="padding: 6px 0; font-family: monospace; color: #0066cc;">{self.model_id}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 6px 0; color: #666; font-weight: 500;">Variable:</td>
+                        <td style="padding: 6px 0; font-family: monospace; color: #0066cc;">{self.variable_name}</td>
+                    </tr>
+        """
+
+        # CF Standard Name
+        if "CF standard Name" in variable_info:
+            html += f"""
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 6px 0; color: #666; font-weight: 500;">CF Standard Name:</td>
+                        <td style="padding: 6px 0; font-family: monospace; font-size: 0.85em;">{variable_info['CF standard Name']}</td>
+                    </tr>
+            """
+
+        # Units
+        if "units" in variable_info:
+            html += f"""
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 6px 0; color: #666; font-weight: 500;">Units:</td>
+                        <td style="padding: 6px 0; font-family: monospace; color: #d73027;">{variable_info['units']}</td>
+                    </tr>
+            """
+
+        # Dimensions
+        if "dimensions" in variable_info:
+            dims = variable_info["dimensions"]
+            dim_entries = [
+                f"<span style='color: #0066cc;'>{k}</span>: <span style='color: #666;'>{v}</span>"
+                for k, v in dims.items()
+            ]
+            dim_str = ", ".join(dim_entries)
+            html += f"""
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 6px 0; color: #666; font-weight: 500;">Dimensions:</td>
+                        <td style="padding: 6px 0; font-family: monospace; font-size: 0.85em;">{dim_str}</td>
+                    </tr>
+            """
+
+        # Model Variables
+        if "model_variables" in variable_info:
+            model_vars = variable_info["model_variables"]
+            if len(model_vars) == 1:
+                html += f"""
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 6px 0; color: #666; font-weight: 500;">Model Variable:</td>
+                        <td style="padding: 6px 0; font-family: monospace; color: #0066cc;">{model_vars[0]}</td>
+                    </tr>
+                """
+            else:
+                vars_list = "</li><li style='margin: 2px 0;'>".join(model_vars)
+                html += f"""
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 6px 0; color: #666; font-weight: 500; vertical-align: top;">Model Variables:</td>
+                        <td style="padding: 6px 0;">
+                            <div style="font-family: monospace; font-size: 0.85em; color: #666;">({len(model_vars)} variables)</div>
+                            <div style="max-height: 120px; overflow-y: auto; margin-top: 4px; padding: 6px; background: #f9f9f9; border: 1px solid #eee; border-radius: 3px;">
+                                <ul style="margin: 0; padding-left: 15px; font-family: monospace; font-size: 0.8em; color: #0066cc;">
+                                    <li style="margin: 2px 0;">{vars_list}</li>
+                                </ul>
+                            </div>
+                        </td>
+                    </tr>
+                """
+
+        # Calculation/Processing
+        if "calculation" in variable_info:
+            calc = variable_info["calculation"]
+            calc_type = calc.get("type", "unknown")
+
+            # Color code by calculation type (xarray-like)
+            type_colors = {
+                "direct": "#4caf50",
+                "formula": "#ff9800",
+                "dataset_function": "#2196f3",
+                "internal": "#9c27b0",
+            }
+            color = type_colors.get(calc_type, "#666")
+
+            html += f"""
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 6px 0; color: #666; font-weight: 500;">Processing:</td>
+                        <td style="padding: 6px 0;">
+                            <span style="background: {color}; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.8em; font-weight: 500;">{calc_type.upper()}</span>
+                        </td>
+                    </tr>
+            """
+
+            # Add formula or operation details
+            if calc_type == "direct" and "formula" in calc:
+                html += f"""
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 6px 0; color: #666; font-weight: 500; padding-left: 20px;">Formula:</td>
+                        <td style="padding: 6px 0; font-family: monospace; color: #333; font-size: 0.85em;">{calc['formula']}</td>
+                    </tr>
+                """
+            elif calc_type == "formula" and "operation" in calc:
+                html += f"""
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 6px 0; color: #666; font-weight: 500; padding-left: 20px;">Operation:</td>
+                        <td style="padding: 6px 0; font-family: monospace; color: #333; font-size: 0.85em;">{calc['operation']}</td>
+                    </tr>
+                """
+            elif calc_type == "dataset_function" and "function" in calc:
+                html += f"""
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 6px 0; color: #666; font-weight: 500; padding-left: 20px;">Function:</td>
+                        <td style="padding: 6px 0; font-family: monospace; color: #333; font-size: 0.85em;">{calc['function']}</td>
+                    </tr>
+                """
+
+        # Z-axis information (for 3D variables)
+        if "zaxis" in variable_info:
+            zaxis = variable_info["zaxis"]
+            html += f"""
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 6px 0; color: #666; font-weight: 500;">Vertical Coord:</td>
+                        <td style="padding: 6px 0; font-family: monospace; color: #0066cc;">{zaxis.get('type', 'Unknown')}</td>
+                    </tr>
+            """
+
+        # Positive direction
+        if "positive" in variable_info and variable_info["positive"]:
+            html += f"""
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 6px 0; color: #666; font-weight: 500;">Positive:</td>
+                        <td style="padding: 6px 0; font-family: monospace; color: #333;">{variable_info['positive']}</td>
+                    </tr>
+            """
+
+        html += """
+                </table>
+            </div>
+        </div>
+        """
+        return html
+
+    def summary(self):
+        """Return a brief summary of the mapping."""
+        if not self._mapping:
+            return f"No mapping found for {self.compound_name} in model {self.model_id}"
+
+        variable_info = list(self._mapping.values())[0]
+        model_vars = variable_info.get("model_variables", [])
+        calc_type = variable_info.get("calculation", {}).get("type", "unknown")
+
+        return f"{self.compound_name}: {len(model_vars)} model variable(s), {calc_type} processing"
+
+    def to_dict(self):
+        """Return the underlying mapping dictionary."""
+        return self._mapping
 
 
 class FrequencyMismatchError(ValueError):
@@ -2033,3 +2479,361 @@ def calculate_longitude_bounds(
         dims=(lon_coord, bnds_name),
         attrs={},  # No attributes for bounds variables per CMIP6 standards
     )
+
+
+def generate_cmip7_to_cmip6_mapping(
+    version: str = "latest_stable", output_path: Optional[str] = None
+) -> Dict[str, str]:
+    """
+    Generate a mapping from CMIP7 compound names to CMIP6 compound names.
+
+    This function uses the data_request_api to query the latest CMIP7 data request
+    and creates a mapping between CMIP7 and CMIP6 compound names. The mapping
+    is optionally saved to a JSON file.
+
+    Note: This function internally calls generate_both_cmip_mappings() for efficiency
+    and only returns the forward mapping.
+
+    Args:
+        version: Version of the data request to use (default: "latest_stable")
+        output_path: Optional path to save the JSON mapping file. If None,
+                    saves to the vocabularies directory within the package.
+
+    Returns:
+        Dictionary mapping CMIP7 compound names to CMIP6 compound names
+
+    Raises:
+        ImportError: If data_request_api package is not available
+
+    Example:
+        >>> mapping = generate_cmip7_to_cmip6_mapping()
+        >>> print(mapping["Amon.tas"])  # Should return corresponding CMIP6 name
+    """
+    if not DATA_REQUEST_API_AVAILABLE:
+        raise ImportError(
+            "data_request_api package is required for generating CMIP7 mappings. "
+            "Install it with: pip install CMIP7-data-request-api"
+        )
+
+    # Generate both mappings efficiently and return only the forward mapping
+    forward_mapping, _ = generate_both_cmip_mappings(
+        version=version,
+        forward_output_path=output_path,
+        reverse_output_path=None,  # Use default path for reverse mapping
+    )
+    return forward_mapping
+
+
+def load_cmip7_to_cmip6_mapping(mapping_path: Optional[str] = None) -> Dict[str, str]:
+    """
+    Load the CMIP7 to CMIP6 compound name mapping from a JSON file.
+
+    Args:
+        mapping_path: Optional path to the mapping JSON file. If None,
+                     loads from the default location in the vocabularies directory.
+
+    Returns:
+        Dictionary mapping CMIP7 compound names to CMIP6 compound names
+
+    Raises:
+        FileNotFoundError: If the mapping file doesn't exist
+        json.JSONDecodeError: If the mapping file contains invalid JSON
+    """
+    if mapping_path is None:
+        # Default to mappings directory within the package
+        import access_moppy
+
+        package_path = Path(access_moppy.__file__).parent
+        mappings_path = package_path / "mappings"
+        mapping_path = mappings_path / "cmip7_to_cmip6_compound_name_mapping.json"
+    else:
+        mapping_path = Path(mapping_path)
+
+    if not mapping_path.exists():
+        raise FileNotFoundError(
+            f"CMIP7 to CMIP6 mapping file not found: {mapping_path}. "
+            "Please run generate_cmip7_to_cmip6_mapping() first to create it."
+        )
+
+    with open(mapping_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    # Filter out metadata if present
+    mapping = {k: v for k, v in data.items() if not k.startswith("_")}
+
+    print(f"✓ Loaded mapping for {len(mapping)} variables from: {mapping_path}")
+    return mapping
+
+
+def generate_cmip6_to_cmip7_mapping(
+    version: str = "latest_stable", output_path: Optional[str] = None
+) -> Dict[str, str]:
+    """
+    Generate a reverse mapping from CMIP6 compound names to CMIP7 compound names.
+
+    This function uses the data_request_api to query the latest CMIP7 data request
+    and creates a reverse mapping between CMIP6 and CMIP7 compound names. The mapping
+    is optionally saved to a JSON file.
+
+    Note: This function internally calls generate_both_cmip_mappings() for efficiency
+    and only returns the reverse mapping.
+
+    Args:
+        version: Version of the data request to use (default: "latest_stable")
+        output_path: Optional path to save the JSON mapping file. If None,
+                    saves to the vocabularies directory within the package.
+
+    Returns:
+        Dictionary mapping CMIP6 compound names to CMIP7 compound names
+
+    Raises:
+        ImportError: If data_request_api package is not available
+
+    Example:
+        >>> reverse_mapping = generate_cmip6_to_cmip7_mapping()
+        >>> print(reverse_mapping["AERmon.abs550aer"])  # Should return corresponding CMIP7 name
+    """
+    if not DATA_REQUEST_API_AVAILABLE:
+        raise ImportError(
+            "data_request_api package is required for generating CMIP7 mappings. "
+            "Install it with: pip install CMIP7-data-request-api"
+        )
+
+    # Generate both mappings efficiently and return only the reverse mapping
+    _, reverse_mapping = generate_both_cmip_mappings(
+        version=version,
+        forward_output_path=None,  # Use default path for forward mapping
+        reverse_output_path=output_path,
+    )
+    return reverse_mapping
+
+
+def load_cmip6_to_cmip7_mapping(mapping_path: Optional[str] = None) -> Dict[str, str]:
+    """
+    Load the CMIP6 to CMIP7 compound name mapping from a JSON file.
+
+    Args:
+        mapping_path: Optional path to the mapping JSON file. If None,
+                     loads from the default location in the vocabularies directory.
+
+    Returns:
+        Dictionary mapping CMIP6 compound names to CMIP7 compound names
+
+    Raises:
+        FileNotFoundError: If the mapping file doesn't exist
+        json.JSONDecodeError: If the mapping file contains invalid JSON
+    """
+    if mapping_path is None:
+        # Default to mappings directory within the package
+        import access_moppy
+
+        package_path = Path(access_moppy.__file__).parent
+        mappings_path = package_path / "mappings"
+        mapping_path = mappings_path / "cmip6_to_cmip7_compound_name_mapping.json"
+    else:
+        mapping_path = Path(mapping_path)
+
+    if not mapping_path.exists():
+        raise FileNotFoundError(
+            f"CMIP6 to CMIP7 mapping file not found: {mapping_path}. "
+            "Please run generate_cmip6_to_cmip7_mapping() first to create it."
+        )
+
+    with open(mapping_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    # Filter out metadata if present
+    mapping = {k: v for k, v in data.items() if not k.startswith("_")}
+
+    print(f"✓ Loaded reverse mapping for {len(mapping)} variables from: {mapping_path}")
+    return mapping
+
+
+def get_cmip_mapping_metadata(mapping_type: str = "forward") -> Dict:
+    """
+    Get metadata about the CMIP7↔CMIP6 compound name mapping files.
+
+    Args:
+        mapping_type: Either "forward" (CMIP7→CMIP6) or "reverse" (CMIP6→CMIP7)
+
+    Returns:
+        Dictionary containing metadata about the mapping file
+
+    Raises:
+        ValueError: If mapping_type is not "forward" or "reverse"
+        FileNotFoundError: If the mapping file doesn't exist
+    """
+    if mapping_type not in ["forward", "reverse"]:
+        raise ValueError("mapping_type must be 'forward' or 'reverse'")
+
+    import access_moppy
+
+    package_path = Path(access_moppy.__file__).parent
+    mappings_path = package_path / "mappings"
+
+    if mapping_type == "forward":
+        mapping_path = mappings_path / "cmip7_to_cmip6_compound_name_mapping.json"
+    else:
+        mapping_path = mappings_path / "cmip6_to_cmip7_compound_name_mapping.json"
+
+    if not mapping_path.exists():
+        raise FileNotFoundError(
+            f"Mapping file not found: {mapping_path}. "
+            f"Please run generate_both_cmip_mappings() first to create it."
+        )
+
+    with open(mapping_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    # Extract metadata
+    metadata = data.get("_metadata", {})
+
+    if not metadata:
+        return {"error": "No metadata found in file"}
+
+    return metadata
+
+
+def generate_both_cmip_mappings(
+    version: str = "latest_stable",
+    forward_output_path: Optional[str] = None,
+    reverse_output_path: Optional[str] = None,
+) -> tuple[Dict[str, str], Dict[str, str]]:
+    """
+    Generate both forward (CMIP7->CMIP6) and reverse (CMIP6->CMIP7) mappings efficiently.
+
+    This function queries the CMIP7 data request API once and generates both mappings
+    from the same data, which is more efficient than calling the individual functions separately.
+
+    Args:
+        version: Version of the data request to use (default: "latest_stable")
+        forward_output_path: Optional path for CMIP7->CMIP6 mapping JSON file
+        reverse_output_path: Optional path for CMIP6->CMIP7 mapping JSON file
+
+    Returns:
+        Tuple of (forward_mapping, reverse_mapping) dictionaries
+
+    Raises:
+        ImportError: If data_request_api package is not available
+
+    Example:
+        >>> forward, reverse = generate_both_cmip_mappings()
+        >>> cmip6_name = forward["aerosol.abs550aer.tavg-u-hxy-u.mon.GLB"]
+        >>> cmip7_name = reverse[cmip6_name]
+    """
+    if not DATA_REQUEST_API_AVAILABLE:
+        raise ImportError(
+            "data_request_api package is required for generating CMIP7 mappings. "
+            "Install it with: pip install CMIP7-data-request-api"
+        )
+
+    print("Generating both CMIP7<->CMIP6 compound name mappings...")
+    print("This may take a moment as it queries the CMIP7 data request API...")
+
+    # Use the latest_stable version of the DR content (default)
+    content_dic = dt.get_transformed_content(
+        version=version, force_variable_name="CMIP7 Compound Name"
+    )
+
+    # Create DataRequest object from the content
+    DR = dr.DataRequest.from_separated_inputs(**content_dic)
+
+    # Find all CMIP7 variables
+    cmip7_variables = DR.find_variables(operation="any", skip_if_missing=True)
+
+    # Create both mapping dictionaries
+    forward_mapping = {}  # CMIP7 -> CMIP6
+    reverse_mapping = {}  # CMIP6 -> CMIP7
+
+    for var in cmip7_variables:
+        if hasattr(var, "cmip7_compound_name") and hasattr(var, "cmip6_compound_name"):
+            if var.cmip7_compound_name and var.cmip6_compound_name:
+                cmip7_name = var.cmip7_compound_name.name
+                cmip6_name = var.cmip6_compound_name.name
+
+                # Forward mapping (CMIP7 -> CMIP6)
+                forward_mapping[cmip7_name] = cmip6_name
+
+                # Reverse mapping (CMIP6 -> CMIP7) - handle potential one-to-many
+                if cmip6_name in reverse_mapping:
+                    # If CMIP6 name already exists, store as list
+                    if isinstance(reverse_mapping[cmip6_name], str):
+                        reverse_mapping[cmip6_name] = [
+                            reverse_mapping[cmip6_name],
+                            cmip7_name,
+                        ]
+                    else:
+                        reverse_mapping[cmip6_name].append(cmip7_name)
+                else:
+                    reverse_mapping[cmip6_name] = cmip7_name
+
+    # Save forward mapping
+    if forward_output_path is None:
+        import access_moppy
+
+        package_path = Path(access_moppy.__file__).parent
+        mappings_path = package_path / "mappings"
+        forward_output_path = (
+            mappings_path / "cmip7_to_cmip6_compound_name_mapping.json"
+        )
+    else:
+        forward_output_path = Path(forward_output_path)
+
+    # Create metadata for the JSON files
+    from datetime import datetime
+
+    metadata = {
+        "_metadata": {
+            "description": "CMIP7 to CMIP6 compound name mapping",
+            "generated_by": "access_moppy.utilities.generate_both_cmip_mappings()",
+            "source": "CMIP7 Data Request API",
+            "data_request_version": version,
+            "generated_on": datetime.now().isoformat(),
+            "total_mappings": len(forward_mapping),
+            "usage": "Use access_moppy.utilities.load_cmip7_to_cmip6_mapping() to load this file",
+        }
+    }
+
+    reverse_metadata = {
+        "_metadata": {
+            "description": "CMIP6 to CMIP7 compound name mapping (reverse of forward mapping)",
+            "generated_by": "access_moppy.utilities.generate_both_cmip_mappings()",
+            "source": "CMIP7 Data Request API",
+            "data_request_version": version,
+            "generated_on": datetime.now().isoformat(),
+            "total_mappings": len(reverse_mapping),
+            "usage": "Use access_moppy.utilities.load_cmip6_to_cmip7_mapping() to load this file",
+            "note": "Some CMIP6 names may map to multiple CMIP7 names (stored as arrays)",
+        }
+    }
+
+    # Combine metadata with mappings
+    forward_data = {**metadata, **forward_mapping}
+    reverse_data = {**reverse_metadata, **reverse_mapping}
+
+    forward_output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(forward_output_path, "w", encoding="utf-8") as f:
+        json.dump(forward_data, f, indent=2, sort_keys=True)
+
+    # Save reverse mapping
+    if reverse_output_path is None:
+        import access_moppy
+
+        package_path = Path(access_moppy.__file__).parent
+        mappings_path = package_path / "mappings"
+        reverse_output_path = (
+            mappings_path / "cmip6_to_cmip7_compound_name_mapping.json"
+        )
+    else:
+        reverse_output_path = Path(reverse_output_path)
+
+    reverse_output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(reverse_output_path, "w", encoding="utf-8") as f:
+        json.dump(reverse_data, f, indent=2, sort_keys=True)
+
+    print(f"✓ Generated forward mapping for {len(forward_mapping)} variables")
+    print(f"✓ Saved forward mapping to: {forward_output_path}")
+    print(f"✓ Generated reverse mapping for {len(reverse_mapping)} variables")
+    print(f"✓ Saved reverse mapping to: {reverse_output_path}")
+
+    return forward_mapping, reverse_mapping

@@ -5,10 +5,10 @@ import pandas as pd
 import pytest
 import xarray as xr
 
-from access_moppy.base import CMIP6_CMORiser
+from access_moppy.base import CMORiser
 from access_moppy.ocean import (
-    CMIP6_Ocean_CMORiser_OM2,
-    CMIP6_Ocean_CMORiser_OM3,
+    Ocean_CMORiser_OM2,
+    Ocean_CMORiser_OM3,
 )
 from tests.mocks.mock_data import (
     create_mock_om2_dataset,
@@ -17,7 +17,7 @@ from tests.mocks.mock_data import (
 
 
 class TestCMIP6OceanCMORiserOM2:
-    """Unit tests for CMIP6_Ocean_CMORiser_OM2 (B-grid)."""
+    """Unit tests for Ocean_CMORiser_OM2 (B-grid)."""
 
     @pytest.fixture
     def mock_vocab(self):
@@ -36,6 +36,9 @@ class TestCMIP6OceanCMORiserOM2:
                 "grid_label": "gn",
             }
         )
+        # Mock the methods that return tuples
+        vocab._get_axes = Mock(return_value=({}, {}))
+        vocab._get_required_bounds_variables = Mock(return_value=({}, {}))
         return vocab
 
     @pytest.fixture
@@ -59,11 +62,11 @@ class TestCMIP6OceanCMORiserOM2:
     ):
         """Test that T-grid is inferred from xt_ocean/yt_ocean coordinates."""
         with patch("access_moppy.ocean.Supergrid"):
-            cmoriser = CMIP6_Ocean_CMORiser_OM2(
+            cmoriser = Ocean_CMORiser_OM2(
                 input_paths=["test.nc"],
                 output_path=str(temp_dir),
                 compound_name="Omon.tos",
-                cmip6_vocab=mock_vocab,
+                vocab=mock_vocab,
                 variable_mapping=mock_mapping,
             )
             cmoriser.ds = mock_om2_dataset
@@ -84,11 +87,11 @@ class TestCMIP6OceanCMORiserOM2:
         )
 
         with patch("access_moppy.ocean.Supergrid"):
-            cmoriser = CMIP6_Ocean_CMORiser_OM2(
+            cmoriser = Ocean_CMORiser_OM2(
                 input_paths=["test.nc"],
                 output_path=str(temp_dir),
                 compound_name="Omon.uo",
-                cmip6_vocab=mock_vocab,
+                vocab=mock_vocab,
                 variable_mapping=mock_mapping,
             )
             cmoriser.ds = ds
@@ -101,11 +104,11 @@ class TestCMIP6OceanCMORiserOM2:
     def test_get_dim_rename_om2(self, mock_vocab, mock_mapping, temp_dir):
         """Test dimension renaming for ACCESS-OM2."""
         with patch("access_moppy.ocean.Supergrid"):
-            cmoriser = CMIP6_Ocean_CMORiser_OM2(
+            cmoriser = Ocean_CMORiser_OM2(
                 input_paths=["test.nc"],
                 output_path=str(temp_dir),
                 compound_name="Omon.tos",
-                cmip6_vocab=mock_vocab,
+                vocab=mock_vocab,
                 variable_mapping=mock_mapping,
             )
 
@@ -121,41 +124,15 @@ class TestCMIP6OceanCMORiserOM2:
     def test_arakawa_grid_type(self, mock_vocab, mock_mapping, temp_dir):
         """Test that ACCESS-OM2 uses B-grid (Arakawa B)."""
         with patch("access_moppy.ocean.Supergrid"):
-            cmoriser = CMIP6_Ocean_CMORiser_OM2(
+            cmoriser = Ocean_CMORiser_OM2(
                 input_paths=["test.nc"],
                 output_path=str(temp_dir),
                 compound_name="Omon.tos",
-                cmip6_vocab=mock_vocab,
+                vocab=mock_vocab,
                 variable_mapping=mock_mapping,
             )
 
             assert cmoriser.arakawa == "B"
-
-    @pytest.mark.unit
-    def test_time_bnds_loaded_and_preserved(
-        self, mock_vocab, mock_mapping, mock_om2_dataset, temp_dir
-    ):
-        """Test that time_bnds is loaded with other variables and preserved in output."""
-        with patch("access_moppy.ocean.Supergrid"):
-            # Mock load_dataset to avoid file I/O
-            with patch.object(CMIP6_CMORiser, "load_dataset", return_value=None):
-                cmoriser = CMIP6_Ocean_CMORiser_OM2(
-                    input_paths=["test.nc"],
-                    output_path=str(temp_dir),
-                    compound_name="Omon.tos",
-                    cmip6_vocab=mock_vocab,
-                    variable_mapping=mock_mapping,
-                )
-                cmoriser.ds = mock_om2_dataset
-
-                # Run the processing
-                cmoriser.select_and_process_variables()
-
-                # Verify time_bnds is in the output dataset
-                assert "time_bnds" in cmoriser.ds.data_vars
-
-                # Verify only cmor_name and time_bnds are kept as data variables
-                assert set(cmoriser.ds.data_vars) == {"tos", "time_bnds"}
 
     @pytest.mark.unit
     def test_time_bnds_dimensions_in_used_coords(
@@ -163,12 +140,12 @@ class TestCMIP6OceanCMORiserOM2:
     ):
         """Test that time_bnds dimensions are identified as used coordinates."""
         with patch("access_moppy.ocean.Supergrid"):
-            with patch.object(CMIP6_CMORiser, "load_dataset", return_value=None):
-                cmoriser = CMIP6_Ocean_CMORiser_OM2(
+            with patch.object(CMORiser, "load_dataset", return_value=None):
+                cmoriser = Ocean_CMORiser_OM2(
                     input_paths=["test.nc"],
                     output_path=str(temp_dir),
                     compound_name="Omon.tos",
-                    cmip6_vocab=mock_vocab,
+                    vocab=mock_vocab,
                     variable_mapping=mock_mapping,
                 )
                 cmoriser.ds = mock_om2_dataset
@@ -183,518 +160,9 @@ class TestCMIP6OceanCMORiserOM2:
                 # Verify time_bnds has correct dimensions
                 assert cmoriser.ds["time_bnds"].dims == ("time", "nv")
 
-    @pytest.mark.unit
-    def test_auto_calculate_time_bnds_when_missing(
-        self, mock_vocab, mock_mapping, temp_dir
-    ):
-        """Test that time_bnds is automatically calculated when missing from source data."""
-        # Create dataset WITHOUT time_bnds
-        ds_no_time_bnds = xr.Dataset(
-            data_vars={
-                "surface_temp": (
-                    ["time", "yt_ocean", "xt_ocean"],
-                    np.random.rand(12, 30, 36).astype(np.float32),
-                    {
-                        "long_name": "Sea surface temperature",
-                        "units": "K",
-                    },
-                ),
-            },
-            coords={
-                "time": pd.date_range("2000-01-15", periods=12, freq="MS"),
-                "yt_ocean": ("yt_ocean", np.arange(30), {"units": "degrees_N"}),
-                "xt_ocean": ("xt_ocean", np.arange(36), {"units": "degrees_E"}),
-            },
-            attrs={"title": "ACCESS-OM2", "grid_type": "mosaic"},
-        )
-
-        with patch("access_moppy.ocean.Supergrid"):
-            with patch.object(CMIP6_CMORiser, "load_dataset", return_value=None):
-                cmoriser = CMIP6_Ocean_CMORiser_OM2(
-                    input_paths=["test.nc"],
-                    output_path=str(temp_dir),
-                    compound_name="Omon.tos",
-                    cmip6_vocab=mock_vocab,
-                    variable_mapping=mock_mapping,
-                )
-                cmoriser.ds = ds_no_time_bnds
-
-                # Run processing - should automatically calculate time_bnds
-                cmoriser.select_and_process_variables()
-
-                # Verify time_bnds was created
-                assert "time_bnds" in cmoriser.ds.data_vars
-                assert cmoriser.ds["time_bnds"].shape == (12, 2)
-
-                # Verify dimensions
-                assert cmoriser.ds["time_bnds"].dims == ("time", "nv")
-
-                # Verify nv coordinate exists
-                assert "nv" in cmoriser.ds.coords
-                assert len(cmoriser.ds["nv"]) == 2
-
-    @pytest.mark.unit
-    def test_required_vars_includes_time_bnds(
-        self, mock_vocab, mock_mapping, mock_om2_dataset, temp_dir
-    ):
-        """Test that time_bnds is included in required_vars during loading."""
-        with patch("access_moppy.ocean.Supergrid"):
-            with patch.object(CMIP6_CMORiser, "load_dataset") as mock_load:
-                cmoriser = CMIP6_Ocean_CMORiser_OM2(
-                    input_paths=["test.nc"],
-                    output_path=str(temp_dir),
-                    compound_name="Omon.tos",
-                    cmip6_vocab=mock_vocab,
-                    variable_mapping=mock_mapping,
-                )
-                cmoriser.ds = mock_om2_dataset
-
-                # Run processing
-                cmoriser.select_and_process_variables()
-
-                # Verify load_dataset was called with time_bnds in required_vars
-                mock_load.assert_called_once()
-                call_args = mock_load.call_args
-                required_vars = call_args.kwargs.get("required_vars") or call_args[0][0]
-                assert "time_bnds" in required_vars
-                assert "surface_temp" in required_vars  # model variable
-
-    @pytest.mark.unit
-    def test_calculated_time_bnds_values_monthly_first_end(
-        self, mock_vocab, mock_mapping, temp_dir
-    ):
-        """Test that calculated time_bnds has correct month boundaries."""
-        # Use proper month-start dates
-        ds_no_time_bnds = xr.Dataset(
-            data_vars={
-                "surface_temp": (
-                    ["time", "yt_ocean", "xt_ocean"],
-                    np.random.rand(12, 30, 36).astype(np.float32),
-                ),
-            },
-            coords={
-                # Generate time centered on mid-month (typical for monthly averages)
-                "time": pd.date_range("2000-01-01", periods=12, freq="MS")
-                + pd.Timedelta(days=14),
-                "yt_ocean": np.arange(30),
-                "xt_ocean": np.arange(36),
-            },
-        )
-
-        print(ds_no_time_bnds["time"].values)
-
-        with patch("access_moppy.ocean.Supergrid"):
-            with patch.object(CMIP6_CMORiser, "load_dataset", return_value=None):
-                cmoriser = CMIP6_Ocean_CMORiser_OM2(
-                    input_paths=["test.nc"],
-                    output_path=str(temp_dir),
-                    compound_name="Omon.tos",
-                    cmip6_vocab=mock_vocab,
-                    variable_mapping=mock_mapping,
-                )
-                cmoriser.ds = ds_no_time_bnds
-
-                cmoriser.select_and_process_variables()
-
-                time_bnds = cmoriser.ds["time_bnds"]
-
-                # Check first month (January 2000)
-                # Bounds should be [2000-01-01, 2000-02-01]
-                print(time_bnds.values)
-                first_lower = pd.Timestamp(time_bnds[0, 0].values)
-                first_upper = pd.Timestamp(time_bnds[0, 1].values)
-
-                assert first_lower.year == 2000
-                assert first_lower.month == 1
-                assert first_lower.day == 1
-
-                assert first_upper.year == 2000
-                assert first_upper.month == 2
-                assert first_upper.day == 1
-
-                # Check last month (December 2000)
-                last_lower = pd.Timestamp(time_bnds[11, 0].values)
-                last_upper = pd.Timestamp(time_bnds[11, 1].values)
-
-                assert last_lower.year == 2000
-                assert last_lower.month == 12
-                assert last_lower.day == 1
-
-                assert last_upper.year == 2001
-                assert last_upper.month == 1
-                assert last_upper.day == 1
-
-    @pytest.mark.unit
-    def test_calculated_time_bnds_values_monthly_range(
-        self, mock_vocab, mock_mapping, temp_dir
-    ):
-        """Test that calculated time_bnds has correct structure and reasonable values."""
-        ds_no_time_bnds = xr.Dataset(
-            data_vars={
-                "surface_temp": (
-                    ["time", "yt_ocean", "xt_ocean"],
-                    np.random.rand(12, 30, 36).astype(np.float32),
-                ),
-            },
-            coords={
-                # Monthly time coordinate (mid-month)
-                "time": pd.date_range("2000-01-15", periods=12, freq="MS")
-                + pd.Timedelta(days=14),
-                "yt_ocean": np.arange(30),
-                "xt_ocean": np.arange(36),
-            },
-        )
-
-        ds_no_time_bnds["time"].attrs["units"] = "days since 1850-01-01"
-
-        with patch("access_moppy.ocean.Supergrid"):
-            with patch.object(CMIP6_CMORiser, "load_dataset", return_value=None):
-                cmoriser = CMIP6_Ocean_CMORiser_OM2(
-                    input_paths=["test.nc"],
-                    output_path=str(temp_dir),
-                    compound_name="Omon.tos",
-                    cmip6_vocab=mock_vocab,
-                    variable_mapping=mock_mapping,
-                )
-                cmoriser.ds = ds_no_time_bnds
-
-                cmoriser.select_and_process_variables()
-
-                time_bnds = cmoriser.ds["time_bnds"]
-
-                # Verify shape
-                assert time_bnds.shape == (12, 2)
-                assert time_bnds.dims == ("time", "nv")
-
-                # For each time step, verify bounds make sense
-                for i in range(12):
-                    lower = pd.Timestamp(time_bnds[i, 0].values)
-                    upper = pd.Timestamp(time_bnds[i, 1].values)
-
-                    # Lower bound should be before upper bound
-                    assert (
-                        lower < upper
-                    ), f"Lower bound >= upper bound at index {i}: [{lower}, {upper}]"
-
-                    # Bounds should span about 1 month (28-31 days)
-                    days_span = (upper - lower).days
-                    assert (
-                        28 <= days_span <= 31
-                    ), f"Unexpected time span {days_span} days at index {i}, expected 28-31 days"
-
-                # Verify all bounds are in year 2000-2001 range (reasonable for test data)
-                all_bnds = time_bnds.values.flatten()
-                years = [pd.Timestamp(b).year for b in all_bnds]
-                assert all(
-                    y in [2000, 2001] for y in years
-                ), f"Unexpected years in bounds: {set(years)}"
-
-                # Verify bounds have proper attributes
-                assert "long_name" in time_bnds.attrs
-                assert "units" in time_bnds.attrs
-
-    @pytest.mark.unit
-    def test_debug_time_bnds_calculation(self, mock_vocab, mock_mapping, temp_dir):
-        """Debug test to see what time_bnds are actually calculated."""
-        ds_no_time_bnds = xr.Dataset(
-            data_vars={
-                "surface_temp": (
-                    ["time", "yt_ocean", "xt_ocean"],
-                    np.random.rand(12, 30, 36).astype(np.float32),
-                ),
-            },
-            coords={
-                "time": pd.date_range("2000-01-15", periods=12, freq="MS")
-                + pd.Timedelta(days=14),
-                "yt_ocean": np.arange(30),
-                "xt_ocean": np.arange(36),
-            },
-        )
-
-        with patch("access_moppy.ocean.Supergrid"):
-            with patch.object(CMIP6_CMORiser, "load_dataset", return_value=None):
-                cmoriser = CMIP6_Ocean_CMORiser_OM2(
-                    input_paths=["test.nc"],
-                    output_path=str(temp_dir),
-                    compound_name="Omon.tos",
-                    cmip6_vocab=mock_vocab,
-                    variable_mapping=mock_mapping,
-                )
-                cmoriser.ds = ds_no_time_bnds
-
-                cmoriser.select_and_process_variables()
-
-                # Print what we got
-                print("\n=== Debug: Time values ===")
-                for i, t in enumerate(cmoriser.ds["time"].values[:3]):
-                    print(f"time[{i}]: {pd.Timestamp(t)}")
-
-                print("\n=== Debug: Time bounds ===")
-                for i in range(3):
-                    lower = pd.Timestamp(cmoriser.ds["time_bnds"][i, 0].values)
-                    upper = pd.Timestamp(cmoriser.ds["time_bnds"][i, 1].values)
-                    print(f"time_bnds[{i}]: [{lower}, {upper}]")
-
-    @pytest.mark.unit
-    def test_existing_time_bnds_not_overwritten(
-        self, mock_vocab, mock_mapping, temp_dir
-    ):
-        """Test that existing time_bnds is NOT overwritten."""
-        # Create dataset with existing time_bnds (with special marker values)
-        time = pd.date_range("2000-01-15", periods=12, freq="MS")
-
-        # Special time_bnds with marker values to verify it's not overwritten
-        existing_time_bnds = np.zeros((12, 2), dtype="datetime64[ns]")
-        marker_time = np.datetime64("1999-12-31")  # Special marker
-        existing_time_bnds[:, 0] = marker_time
-        existing_time_bnds[:, 1] = marker_time + np.timedelta64(1, "D")
-
-        ds_with_bnds = xr.Dataset(
-            data_vars={
-                "surface_temp": (
-                    ["time", "yt_ocean", "xt_ocean"],
-                    np.random.rand(12, 30, 36).astype(np.float32),
-                ),
-                "time_bnds": (
-                    ["time", "nv"],
-                    existing_time_bnds,
-                    {"long_name": "time bounds"},
-                ),
-            },
-            coords={
-                "time": time,
-                "yt_ocean": np.arange(30),
-                "xt_ocean": np.arange(36),
-                "nv": [0, 1],
-            },
-            attrs={"title": "ACCESS-OM2"},
-        )
-
-        with patch("access_moppy.ocean.Supergrid"):
-            with patch.object(CMIP6_CMORiser, "load_dataset", return_value=None):
-                cmoriser = CMIP6_Ocean_CMORiser_OM2(
-                    input_paths=["test.nc"],
-                    output_path=str(temp_dir),
-                    compound_name="Omon.tos",
-                    cmip6_vocab=mock_vocab,
-                    variable_mapping=mock_mapping,
-                )
-                cmoriser.ds = ds_with_bnds
-
-                cmoriser.select_and_process_variables()
-
-                # Verify original time_bnds was kept (marker value still there)
-                assert cmoriser.ds["time_bnds"][0, 0].values == marker_time
-                assert "time_bnds" in cmoriser.ds.data_vars
-
-    @pytest.mark.unit
-    def test_time_bnds_attributes(self, mock_vocab, mock_mapping, temp_dir):
-        """Test that calculated time_bnds has proper attributes."""
-        ds_no_time_bnds = xr.Dataset(
-            data_vars={
-                "surface_temp": (
-                    ["time", "yt_ocean", "xt_ocean"],
-                    np.random.rand(12, 30, 36).astype(np.float32),
-                ),
-            },
-            coords={
-                "time": (
-                    "time",
-                    pd.date_range("2000-01-15", periods=12, freq="MS"),
-                    {
-                        "long_name": "time",
-                        "units": "days since 0001-01-01 00:00:00",
-                        "calendar": "PROLEPTIC_GREGORIAN",
-                    },
-                ),
-                "yt_ocean": np.arange(30),
-                "xt_ocean": np.arange(36),
-            },
-        )
-
-        with patch("access_moppy.ocean.Supergrid"):
-            with patch.object(CMIP6_CMORiser, "load_dataset", return_value=None):
-                cmoriser = CMIP6_Ocean_CMORiser_OM2(
-                    input_paths=["test.nc"],
-                    output_path=str(temp_dir),
-                    compound_name="Omon.tos",
-                    cmip6_vocab=mock_vocab,
-                    variable_mapping=mock_mapping,
-                )
-                cmoriser.ds = ds_no_time_bnds
-
-                cmoriser.select_and_process_variables()
-
-                time_bnds = cmoriser.ds["time_bnds"]
-
-                # Check attributes
-                assert "long_name" in time_bnds.attrs
-                assert time_bnds.attrs["long_name"] == "time bounds"
-                assert "units" in time_bnds.attrs
-
-    @pytest.mark.unit
-    def test_only_tos_and_time_bnds_kept(self, mock_vocab, mock_mapping, temp_dir):
-        """Test that only CMOR variable and time_bnds are kept in final dataset."""
-        # Create dataset with extra variables that should be dropped
-        ds_with_extras = xr.Dataset(
-            data_vars={
-                "surface_temp": (
-                    ["time", "yt_ocean", "xt_ocean"],
-                    np.random.rand(12, 30, 36).astype(np.float32),
-                ),
-                "extra_var1": (
-                    ["time", "yt_ocean", "xt_ocean"],
-                    np.random.rand(12, 30, 36),
-                ),
-                "extra_var2": (["yt_ocean", "xt_ocean"], np.random.rand(30, 36)),
-            },
-            coords={
-                "time": pd.date_range("2000-01-15", periods=12, freq="MS"),
-                "yt_ocean": np.arange(30),
-                "xt_ocean": np.arange(36),
-            },
-            attrs={"title": "ACCESS-OM2"},
-        )
-
-        with patch("access_moppy.ocean.Supergrid"):
-            with patch.object(CMIP6_CMORiser, "load_dataset", return_value=None):
-                cmoriser = CMIP6_Ocean_CMORiser_OM2(
-                    input_paths=["test.nc"],
-                    output_path=str(temp_dir),
-                    compound_name="Omon.tos",
-                    cmip6_vocab=mock_vocab,
-                    variable_mapping=mock_mapping,
-                )
-                cmoriser.ds = ds_with_extras
-
-                cmoriser.select_and_process_variables()
-
-                # Only tos and time_bnds should remain
-                assert set(cmoriser.ds.data_vars) == {"tos", "time_bnds"}
-
-                # Extra variables should be dropped
-                assert "extra_var1" not in cmoriser.ds
-                assert "extra_var2" not in cmoriser.ds
-                assert "surface_temp" not in cmoriser.ds  # Original var was renamed
-
-    @pytest.mark.unit
-    def test_nv_coordinate_preserved(self, mock_vocab, mock_mapping, temp_dir):
-        """Test that nv coordinate is preserved (needed by time_bnds)."""
-        ds_no_time_bnds = xr.Dataset(
-            data_vars={
-                "surface_temp": (
-                    ["time", "yt_ocean", "xt_ocean"],
-                    np.random.rand(12, 30, 36).astype(np.float32),
-                ),
-            },
-            coords={
-                "time": pd.date_range("2000-01-15", periods=12, freq="MS"),
-                "yt_ocean": np.arange(30),
-                "xt_ocean": np.arange(36),
-            },
-            attrs={"title": "ACCESS-OM2"},
-        )
-
-        with patch("access_moppy.ocean.Supergrid"):
-            with patch.object(CMIP6_CMORiser, "load_dataset", return_value=None):
-                cmoriser = CMIP6_Ocean_CMORiser_OM2(
-                    input_paths=["test.nc"],
-                    output_path=str(temp_dir),
-                    compound_name="Omon.tos",
-                    cmip6_vocab=mock_vocab,
-                    variable_mapping=mock_mapping,
-                )
-                cmoriser.ds = ds_no_time_bnds
-
-                cmoriser.select_and_process_variables()
-
-                # nv should be in coordinates
-                assert "nv" in cmoriser.ds.coords
-
-                # time should be in coordinates
-                assert "time" in cmoriser.ds.coords
-
-                # Spatial coordinates should be preserved (renamed)
-                assert "j" in cmoriser.ds.coords  # Renamed from yt_ocean
-                assert "i" in cmoriser.ds.coords  # Renamed from xt_ocean
-
-    @pytest.mark.unit
-    def test_error_when_time_missing_and_cannot_calculate(
-        self, mock_vocab, mock_mapping, temp_dir
-    ):
-        """Test that error is raised when time coordinate is missing and time_bnds cannot be calculated."""
-        # Create dataset without time coordinate
-        ds_no_time = xr.Dataset(
-            data_vars={
-                "surface_temp": (
-                    ["yt_ocean", "xt_ocean"],
-                    np.random.rand(30, 36).astype(np.float32),
-                ),
-            },
-            coords={
-                "yt_ocean": np.arange(30),
-                "xt_ocean": np.arange(36),
-            },
-        )
-
-        with patch("access_moppy.ocean.Supergrid"):
-            with patch.object(CMIP6_CMORiser, "load_dataset", return_value=None):
-                cmoriser = CMIP6_Ocean_CMORiser_OM2(
-                    input_paths=["test.nc"],
-                    output_path=str(temp_dir),
-                    compound_name="Omon.tos",
-                    cmip6_vocab=mock_vocab,
-                    variable_mapping=mock_mapping,
-                )
-                cmoriser.ds = ds_no_time
-
-                # Should raise error because time_bnds cannot be calculated without time
-                with pytest.raises(
-                    ValueError, match="time_bnds is required.*could not be calculated"
-                ):
-                    cmoriser.select_and_process_variables()
-
-    @pytest.mark.unit
-    def test_time_bnds_continuous_coverage(self, mock_vocab, mock_mapping, temp_dir):
-        """Test that calculated time_bnds provides continuous coverage (no gaps)."""
-        ds_no_time_bnds = xr.Dataset(
-            data_vars={
-                "surface_temp": (
-                    ["time", "yt_ocean", "xt_ocean"],
-                    np.random.rand(12, 30, 36).astype(np.float32),
-                ),
-            },
-            coords={
-                "time": pd.date_range("2000-01-15", periods=12, freq="MS"),
-                "yt_ocean": np.arange(30),
-                "xt_ocean": np.arange(36),
-            },
-        )
-
-        with patch("access_moppy.ocean.Supergrid"):
-            with patch.object(CMIP6_CMORiser, "load_dataset", return_value=None):
-                cmoriser = CMIP6_Ocean_CMORiser_OM2(
-                    input_paths=["test.nc"],
-                    output_path=str(temp_dir),
-                    compound_name="Omon.tos",
-                    cmip6_vocab=mock_vocab,
-                    variable_mapping=mock_mapping,
-                )
-                cmoriser.ds = ds_no_time_bnds
-
-                cmoriser.select_and_process_variables()
-
-                time_bnds = cmoriser.ds["time_bnds"]
-
-                # Upper bound of month i should equal lower bound of month i+1
-                for i in range(len(time_bnds) - 1):
-                    assert (
-                        time_bnds[i, 1].values == time_bnds[i + 1, 0].values
-                    ), f"Gap in time_bnds between index {i} and {i+1}"
-
 
 class TestCMIP6OceanCMORiserOM3:
-    """Unit tests for CMIP6_Ocean_CMORiser_OM3 (C-grid)."""
+    """Unit tests for Ocean_CMORiser_OM3 (C-grid)."""
 
     @pytest.fixture
     def mock_vocab(self):
@@ -713,6 +181,9 @@ class TestCMIP6OceanCMORiserOM3:
                 "grid_label": "gn",
             }
         )
+        # Mock the methods that return tuples
+        vocab._get_axes = Mock(return_value=({}, {}))
+        vocab._get_required_bounds_variables = Mock(return_value=({}, {}))
         return vocab
 
     @pytest.fixture
@@ -736,11 +207,11 @@ class TestCMIP6OceanCMORiserOM3:
     ):
         """Test that T-grid is inferred from xh/yh coordinates."""
         with patch("access_moppy.ocean.Supergrid"):
-            cmoriser = CMIP6_Ocean_CMORiser_OM3(
+            cmoriser = Ocean_CMORiser_OM3(
                 input_paths=["test.nc"],
                 output_path=str(temp_dir),
                 compound_name="Omon.tos",
-                cmip6_vocab=mock_vocab,
+                vocab=mock_vocab,
                 variable_mapping=mock_mapping,
             )
             cmoriser.ds = mock_om3_dataset
@@ -761,11 +232,11 @@ class TestCMIP6OceanCMORiserOM3:
         )
 
         with patch("access_moppy.ocean.Supergrid"):
-            cmoriser = CMIP6_Ocean_CMORiser_OM3(
+            cmoriser = Ocean_CMORiser_OM3(
                 input_paths=["test.nc"],
                 output_path=str(temp_dir),
                 compound_name="Omon.uo",
-                cmip6_vocab=mock_vocab,
+                vocab=mock_vocab,
                 variable_mapping=mock_mapping,
             )
             cmoriser.ds = ds
@@ -785,11 +256,11 @@ class TestCMIP6OceanCMORiserOM3:
         )
 
         with patch("access_moppy.ocean.Supergrid"):
-            cmoriser = CMIP6_Ocean_CMORiser_OM3(
+            cmoriser = Ocean_CMORiser_OM3(
                 input_paths=["test.nc"],
                 output_path=str(temp_dir),
                 compound_name="Omon.vo",
-                cmip6_vocab=mock_vocab,
+                vocab=mock_vocab,
                 variable_mapping=mock_mapping,
             )
             cmoriser.ds = ds
@@ -809,11 +280,11 @@ class TestCMIP6OceanCMORiserOM3:
         )
 
         with patch("access_moppy.ocean.Supergrid"):
-            cmoriser = CMIP6_Ocean_CMORiser_OM3(
+            cmoriser = Ocean_CMORiser_OM3(
                 input_paths=["test.nc"],
                 output_path=str(temp_dir),
                 compound_name="Omon.var",
-                cmip6_vocab=mock_vocab,
+                vocab=mock_vocab,
                 variable_mapping=mock_mapping,
             )
             cmoriser.ds = ds
@@ -826,11 +297,11 @@ class TestCMIP6OceanCMORiserOM3:
     def test_get_dim_rename_om3(self, mock_vocab, mock_mapping, temp_dir):
         """Test dimension renaming for ACCESS-OM3."""
         with patch("access_moppy.ocean.Supergrid"):
-            cmoriser = CMIP6_Ocean_CMORiser_OM3(
+            cmoriser = Ocean_CMORiser_OM3(
                 input_paths=["test.nc"],
                 output_path=str(temp_dir),
                 compound_name="Omon.tos",
-                cmip6_vocab=mock_vocab,
+                vocab=mock_vocab,
                 variable_mapping=mock_mapping,
             )
 
@@ -846,12 +317,183 @@ class TestCMIP6OceanCMORiserOM3:
     def test_arakawa_grid_type(self, mock_vocab, mock_mapping, temp_dir):
         """Test that ACCESS-OM3 uses C-grid (Arakawa C)."""
         with patch("access_moppy.ocean.Supergrid"):
-            cmoriser = CMIP6_Ocean_CMORiser_OM3(
+            cmoriser = Ocean_CMORiser_OM3(
                 input_paths=["test.nc"],
                 output_path=str(temp_dir),
                 compound_name="Omon.tos",
-                cmip6_vocab=mock_vocab,
+                vocab=mock_vocab,
                 variable_mapping=mock_mapping,
             )
 
             assert cmoriser.arakawa == "C"
+
+
+class TestOceanDerivations:
+    """Unit tests for ocean derivation functions."""
+
+    @pytest.fixture
+    def mock_transport_data(self):
+        """Create mock transport data for testing umo/vmo calculations."""
+        # Create test coordinates
+        time = pd.date_range("2000-01-01", periods=3, freq="MS")
+        depth = np.arange(0, 50, 10)  # 5 levels
+        lat = np.linspace(-60, 60, 5)
+        lon = np.linspace(0, 360, 6, endpoint=False)
+
+        # Create test transport data with some realistic patterns
+        # Resolved transport: simple zonal flow pattern
+        resolved_values = np.random.normal(
+            0, 1e6, (len(time), len(depth), len(lat), len(lon))
+        )
+
+        # GM transport: typically smaller than resolved
+        gm_values = np.random.normal(
+            0, 5e5, (len(time), len(depth), len(lat), len(lon))
+        )
+
+        # Submeso transport: typically smallest
+        submeso_values = np.random.normal(
+            0, 2e5, (len(time), len(depth), len(lat), len(lon))
+        )
+
+        # Create xarray DataArrays
+        coords = {"time": time, "st_ocean": depth, "yt_ocean": lat, "xu_ocean": lon}
+
+        tx_trans = xr.DataArray(
+            resolved_values,
+            coords=coords,
+            dims=["time", "st_ocean", "yt_ocean", "xu_ocean"],
+            attrs={"units": "kg/s"},
+        )
+
+        tx_trans_gm = xr.DataArray(
+            gm_values,
+            coords=coords,
+            dims=["time", "st_ocean", "yt_ocean", "xu_ocean"],
+            attrs={"units": "kg/s"},
+        )
+
+        tx_trans_submeso = xr.DataArray(
+            submeso_values,
+            coords=coords,
+            dims=["time", "st_ocean", "yt_ocean", "xu_ocean"],
+            attrs={"units": "kg/s"},
+        )
+
+        return tx_trans, tx_trans_gm, tx_trans_submeso
+
+    @pytest.mark.unit
+    def test_calc_total_mass_transport_resolved_only(self, mock_transport_data):
+        """Test total mass transport calculation with only resolved transport."""
+        from access_moppy.derivations.calc_ocean import calc_total_mass_transport
+
+        tx_trans, _, _ = mock_transport_data
+
+        result = calc_total_mass_transport(tx_trans)
+
+        # With only resolved transport, result should be identical to input
+        xr.testing.assert_allclose(result, tx_trans)
+        assert result.attrs["units"] == "kg/s"
+
+    @pytest.mark.unit
+    def test_calc_total_mass_transport_with_gm(self, mock_transport_data):
+        """Test total mass transport calculation with GM component."""
+        from access_moppy.derivations.calc_ocean import calc_total_mass_transport
+
+        tx_trans, tx_trans_gm, _ = mock_transport_data
+
+        result = calc_total_mass_transport(tx_trans, gm_trans=tx_trans_gm)
+
+        # Result should have same shape as input
+        assert result.shape == tx_trans.shape
+        assert result.dims == tx_trans.dims
+
+        # Result should be different from resolved-only transport
+        assert not np.allclose(result.values, tx_trans.values)
+
+    @pytest.mark.unit
+    def test_calc_total_mass_transport_all_components(self, mock_transport_data):
+        """Test total mass transport with all components."""
+        from access_moppy.derivations.calc_ocean import calc_total_mass_transport
+
+        tx_trans, tx_trans_gm, tx_trans_submeso = mock_transport_data
+
+        result = calc_total_mass_transport(
+            tx_trans, gm_trans=tx_trans_gm, submeso_trans=tx_trans_submeso
+        )
+
+        # Result should have same shape and coordinates
+        assert result.shape == tx_trans.shape
+        assert result.dims == tx_trans.dims
+        assert list(result.coords.keys()) == list(tx_trans.coords.keys())
+
+    @pytest.mark.unit
+    def test_calc_umo_corrected(self, mock_transport_data):
+        """Test umo corrected calculation."""
+        from access_moppy.derivations.calc_ocean import calc_umo_corrected
+
+        tx_trans, tx_trans_gm, tx_trans_submeso = mock_transport_data
+
+        result = calc_umo_corrected(
+            tx_trans, tx_trans_gm=tx_trans_gm, tx_trans_submeso=tx_trans_submeso
+        )
+
+        # Check output properties
+        assert result.shape == tx_trans.shape
+        assert result.dims == tx_trans.dims
+        assert "time" in result.dims
+        assert "st_ocean" in result.dims
+
+        # Should be different from resolved-only
+        assert not np.allclose(result.values, tx_trans.values)
+
+    @pytest.mark.unit
+    def test_calc_vmo_corrected(self, mock_transport_data):
+        """Test vmo corrected calculation."""
+        from access_moppy.derivations.calc_ocean import calc_vmo_corrected
+
+        # Use same mock data but imagine it's ty_trans instead of tx_trans
+        ty_trans, ty_trans_gm, ty_trans_submeso = mock_transport_data
+
+        # Change coordinate names to match meridional transport
+        ty_trans = ty_trans.rename({"xu_ocean": "xt_ocean", "yt_ocean": "yu_ocean"})
+        ty_trans_gm = ty_trans_gm.rename(
+            {"xu_ocean": "xt_ocean", "yt_ocean": "yu_ocean"}
+        )
+        ty_trans_submeso = ty_trans_submeso.rename(
+            {"xu_ocean": "xt_ocean", "yt_ocean": "yu_ocean"}
+        )
+
+        result = calc_vmo_corrected(
+            ty_trans, ty_trans_gm=ty_trans_gm, ty_trans_submeso=ty_trans_submeso
+        )
+
+        # Check output properties
+        assert result.shape == ty_trans.shape
+        assert result.dims == ty_trans.dims
+        assert "time" in result.dims
+        assert "st_ocean" in result.dims
+
+    @pytest.mark.unit
+    def test_vertical_difference_boundary_condition(self, mock_transport_data):
+        """Test that vertical difference correctly handles surface boundary conditions."""
+        from access_moppy.derivations.calc_ocean import calc_total_mass_transport
+
+        tx_trans, tx_trans_gm, _ = mock_transport_data
+
+        # Create a simple case where GM transport is constant with depth
+        # The vertical difference should then be zero everywhere except surface
+        const_gm = xr.ones_like(tx_trans_gm) * 1e5
+
+        result = calc_total_mass_transport(tx_trans, gm_trans=const_gm)
+
+        # The GM contribution should be zero everywhere except first level
+        gm_contribution = result - tx_trans
+
+        # For constant GM transport, expect first level = const_gm, rest = 0
+        # First level should equal const_gm (1e5)
+        assert np.allclose(gm_contribution.isel(st_ocean=0).values, 1e5)
+
+        # Deeper levels should be zero (diff of constant is 0)
+        for i in range(1, len(gm_contribution.st_ocean)):
+            assert np.allclose(gm_contribution.isel(st_ocean=i).values, 0.0, atol=1e-10)

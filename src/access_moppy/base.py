@@ -9,7 +9,7 @@ import netCDF4 as nc
 import numpy as np
 import psutil
 import xarray as xr
-from cftime import date2num, num2date
+from cftime import date2num
 from dask.distributed import get_client
 
 from access_moppy.utilities import (
@@ -165,9 +165,9 @@ class DatasetChunker:
         return rechunked_ds
 
 
-class CMIP6_CMORiser:
+class CMORiser:
     """
-    Base class for CMIP6 CMORisers, providing shared logic for CMORisation.
+    Base class for CMORisers, providing shared logic for CMORisation across different CMIP versions.
     """
 
     type_mapping = type_mapping
@@ -177,7 +177,7 @@ class CMIP6_CMORiser:
         input_data: Optional[Union[str, List[str], xr.Dataset, xr.DataArray]] = None,
         *,
         output_path: str,
-        cmip6_vocab: Any,
+        vocab: Any,
         variable_mapping: Dict[str, Any],
         compound_name: str,
         drs_root: Optional[Path] = None,
@@ -229,7 +229,7 @@ class CMIP6_CMORiser:
         self.output_path = output_path
         # Extract cmor_name from compound_name
         _, self.cmor_name = compound_name.split(".")
-        self.vocab = cmip6_vocab
+        self.vocab = vocab
         self.mapping = variable_mapping
         self.drs_root = Path(drs_root) if drs_root is not None else None
         self.version_date = datetime.now().strftime("%Y%m%d")
@@ -321,34 +321,60 @@ class CMIP6_CMORiser:
                 return ds[list(required_vars & set(ds.data_vars))]
 
             # Validate frequency consistency and CMIP6 compatibility before concatenation
+            # Skip validation for time-independent variables (e.g., areacello, static grids)
             if self.validate_frequency and len(self.input_paths) > 0:
-                try:
-                    # Enhanced validation with CMIP6 frequency compatibility
-                    detected_freq, resampling_required = (
-                        validate_cmip6_frequency_compatibility(
-                            self.input_paths,
-                            self.compound_name,
-                            time_coord="time",
-                            interactive=True,
-                        )
+                # Check if this is a time-dependent variable by examining the compound_name
+                # Time-independent variables typically have "fx" (fixed) in their table ID
+                is_time_independent = (
+                    self.compound_name and "fx" in self.compound_name.lower()
+                ) or (
+                    # Also check if any input file has no time dimension
+                    len(self.input_paths) > 0
+                    and "time"
+                    not in xr.open_dataset(self.input_paths[0], decode_cf=False).dims
+                )
+
+                if is_time_independent:
+                    print(
+                        "✓ Skipping frequency validation for time-independent variable"
                     )
-                    if resampling_required:
-                        print(
-                            f"✓ Temporal resampling will be applied: {detected_freq} → CMIP6 target frequency"
+                else:
+                    try:
+                        # Enhanced validation with CMIP frequency compatibility
+                        # Use CMIP6-specific validation if available, otherwise skip
+                        if (
+                            hasattr(self.vocab, "__class__")
+                            and "CMIP6" in self.vocab.__class__.__name__
+                        ):
+                            detected_freq, resampling_required = (
+                                validate_cmip6_frequency_compatibility(
+                                    self.input_paths,
+                                    self.compound_name,
+                                    time_coord="time",
+                                    interactive=True,
+                                )
+                            )
+                            if resampling_required:
+                                print(
+                                    f"✓ Temporal resampling will be applied: {detected_freq} → CMIP6 target frequency"
+                                )
+                            else:
+                                print(
+                                    f"✓ Validated compatible temporal frequency: {detected_freq}"
+                                )
+                        else:
+                            print(
+                                "✓ Skipping detailed frequency validation for this CMIP version"
+                            )
+                    except (FrequencyMismatchError, IncompatibleFrequencyError) as e:
+                        raise e  # Re-raise these specific errors as-is
+                    except InterruptedError as e:
+                        raise e  # Re-raise user abort
+                    except Exception as e:
+                        warnings.warn(
+                            f"Could not validate temporal frequency: {e}. "
+                            f"Proceeding with concatenation but results may be inconsistent."
                         )
-                    else:
-                        print(
-                            f"✓ Validated compatible temporal frequency: {detected_freq}"
-                        )
-                except (FrequencyMismatchError, IncompatibleFrequencyError) as e:
-                    raise e  # Re-raise these specific errors as-is
-                except InterruptedError as e:
-                    raise e  # Re-raise user abort
-                except Exception as e:
-                    warnings.warn(
-                        f"Could not validate temporal frequency: {e}. "
-                        f"Proceeding with concatenation but results may be inconsistent."
-                    )
 
             # Increase xarray's file handle LRU cache to avoid "NetCDF: Not a
             # valid ID" errors when opening large numbers of files in parallel.
@@ -384,7 +410,7 @@ class CMIP6_CMORiser:
                 )
 
                 if was_resampled:
-                    print("✅ Applied temporal resampling to match CMIP6 requirements")
+                    print("✅ Applied temporal resampling to match CMIP requirements")
                 else:
                     print("✅ No resampling needed - frequency already compatible")
 
@@ -510,8 +536,73 @@ class CMIP6_CMORiser:
         if "days since ?" in expected:
             return actual and actual.lower().startswith("days since")
         if actual and expected and actual != expected:
+            # Check for dimensionally equivalent units using pint
+            if self._are_units_equivalent(actual, expected):
+                return True
             raise ValueError(f"Mismatch units for {var}: {actual} != {expected}")
         return True
+
+    def _are_units_equivalent(self, actual: str, expected: str) -> bool:
+        """Check if two unit strings are dimensionally equivalent using pint."""
+        try:
+            import pint
+
+            ureg = pint.UnitRegistry()
+
+            # Handle empty/None units
+            if not actual and not expected:
+                return True
+            if not actual or not expected:
+                return False
+
+            # Normalize unit strings for pint compatibility
+            actual_normalized = self._normalize_unit_string(actual)
+            expected_normalized = self._normalize_unit_string(expected)
+
+            # Parse units with pint
+            actual_unit = ureg.parse_expression(actual_normalized)
+            expected_unit = ureg.parse_expression(expected_normalized)
+
+            # Check if units are dimensionally equivalent
+            return actual_unit.dimensionality == expected_unit.dimensionality
+
+        except (
+            ImportError,
+            pint.UndefinedUnitError,
+            pint.DimensionalityError,
+            Exception,
+        ):
+            # Fallback: only accept exact string matches if pint fails
+            return actual == expected
+
+    def _normalize_unit_string(self, unit_str: str) -> str:
+        """Normalize unit strings to pint-compatible format."""
+        if not unit_str:
+            return ""
+
+        unit_str = unit_str.strip()
+
+        # Handle dimensionless cases
+        if unit_str in ["1", "dimensionless", "unitless", "none", ""]:
+            return "dimensionless"
+
+        # Convert scientific notation to pint format
+        # "kg kg-1" -> "kg/kg"
+        # "m m-1" -> "m/m"
+        # "s s-1" -> "s/s"
+        import re
+
+        # Pattern for "unit unit-1" format
+        pattern = r"(\w+)\s+(\w+)-1"
+        match = re.match(pattern, unit_str)
+        if match and match.group(1) == match.group(2):
+            return f"{match.group(1)}/{match.group(2)}"
+
+        # Handle other common patterns
+        unit_str = unit_str.replace(" ", "*")  # Convert spaces to multiplication
+        unit_str = re.sub(r"(\w+)-(\d+)", r"\1^-\2", unit_str)  # Convert kg-1 to kg^-1
+
+        return unit_str
 
     def _check_calendar(self, var: str):
         calendar = self.ds[var].attrs.get("calendar")
@@ -557,9 +648,10 @@ class CMIP6_CMORiser:
             raise ValueError(f"Values of '{var}' above valid_max: {vmax}")
 
     def drop_intermediates(self):
-        for var in self.mapping[self.cmor_name]["model_variables"]:
-            if var in self.ds.data_vars and var != self.cmor_name:
-                self.ds = self.ds.drop_vars(var)
+        if self.mapping[self.cmor_name].get("model_variables"):
+            for var in self.mapping[self.cmor_name]["model_variables"]:
+                if var in self.ds.data_vars and var != self.cmor_name:
+                    self.ds = self.ds.drop_vars(var)
 
     def _normalize_missing_values_early(self):
         """
@@ -651,19 +743,16 @@ class CMIP6_CMORiser:
         self.ds = ordered(self.ds)
 
     def _build_drs_path(self, attrs: Dict[str, str]) -> Path:
-        drs_components = [
-            attrs.get("mip_era", "CMIP6"),
-            attrs["activity_id"],
-            attrs["institution_id"],
-            attrs["source_id"],
-            attrs["experiment_id"],
-            attrs["variant_label"],
-            attrs["table_id"],
-            attrs["variable_id"],
-            attrs["grid_label"],
-            f"v{self.version_date}",
-        ]
-        return self.drs_root.joinpath(*drs_components)
+        """
+        Build DRS path using the vocabulary class's controlled vocabulary specifications.
+        """
+        if not hasattr(self.vocab, "build_drs_path"):
+            raise AttributeError(
+                f"Vocabulary class {type(self.vocab).__name__} does not implement build_drs_path() method. "
+                "Please ensure you are using a proper CMIP vocabulary class (CMIP6Vocabulary or CMIP7Vocabulary)."
+            )
+
+        return self.vocab.build_drs_path(self.drs_root, self.version_date)
 
     def _update_latest_symlink(self, versioned_path: Path):
         latest_link = versioned_path.parent / "latest"
@@ -706,18 +795,15 @@ class CMIP6_CMORiser:
                 aux_coords.append(name)
 
         attrs = self.ds.attrs
-        required_keys = [
-            "variable_id",
-            "table_id",
-            "source_id",
-            "experiment_id",
-            "variant_label",
-            "grid_label",
-        ]
+
+        # Get required attributes from the vocabulary (works for both CMIP6 and CMIP7)
+        required_keys = self.vocab.get_required_attribute_names()
+
         missing = [k for k in required_keys if k not in attrs]
         if missing:
-            raise ValueError(
-                f"Missing required CMIP6 global attributes for filename: {missing}"
+            print(f"⚠️  Warning: Missing required global attributes: {missing}")
+            print(
+                "   Some attributes may be required for CMIP compliance but file will still be written."
             )
 
         # ========== Memory Check ==========
@@ -802,17 +888,9 @@ class CMIP6_CMORiser:
                 f"Data size: {data_size / 1024**3:.2f} GB, Available memory: {available_memory / 1024**3:.2f} GB"
             )
 
-        time_var = self.ds[self.cmor_name].coords["time"]
-        units = time_var.attrs["units"]
-        calendar = time_var.attrs.get("calendar", "standard").lower()
-        times = num2date(time_var.values[[0, -1]], units=units, calendar=calendar)
-        start, end = [f"{t.year:04d}{t.month:02d}" for t in times]
-        time_range = f"{start}-{end}"
-
-        filename = (
-            f"{attrs['variable_id']}_{attrs['table_id']}_{attrs['source_id']}_"
-            f"{attrs['experiment_id']}_{attrs['variant_label']}_"
-            f"{attrs['grid_label']}_{time_range}.nc"
+        # Generate filename using vocabulary-specific logic
+        filename = self.vocab.generate_filename(
+            attrs, self.ds, self.cmor_name, self.compound_name
         )
 
         if self.drs_root:
@@ -954,7 +1032,7 @@ class CMIP6_CMORiser:
                         chunk_sizes = self.chunker.calculate_chunk_size_for_variable(
                             vdat
                         )
-                        time_chunk = chunk_sizes.get("time", self.ds.sizes["time"])
+                        time_chunk = int(chunk_sizes.get("time", self.ds.sizes["time"]))
                         total_timesteps = self.ds.sizes["time"]
                         time_idx = vdat.dims.index("time")
 

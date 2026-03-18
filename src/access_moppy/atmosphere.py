@@ -1,9 +1,10 @@
+import re
 import warnings
 
 import numpy as np
 import xarray as xr
 
-from access_moppy.base import CMIP6_CMORiser
+from access_moppy.base import CMORiser
 from access_moppy.derivations import custom_functions, evaluate_expression
 from access_moppy.utilities import (
     calculate_latitude_bounds,
@@ -12,40 +13,13 @@ from access_moppy.utilities import (
 )
 
 
-class CMIP6_Atmosphere_CMORiser(CMIP6_CMORiser):
+class Atmosphere_CMORiser(CMORiser):
     """
-    Handles CMORisation of NetCDF datasets using CMIP6 metadata (Atmosphere/Land).
+    Handles CMORisation of NetCDF datasets for Atmosphere/Land variables across CMIP versions.
     """
 
-    def select_and_process_variables(self):
-        # Find all required bounds variables
-        bnds_required = []
-        bounds_rename_map = {}
-        for dim, v in self.vocab.axes.items():
-            if v.get("must_have_bounds") == "yes":
-                # Find the input dimension name that maps to this output name
-                input_dim = None
-                for k, val in self.mapping[self.cmor_name]["dimensions"].items():
-                    if val == v["out_name"]:
-                        input_dim = k
-                        break
-                if input_dim is None:
-                    raise KeyError(
-                        f"Can't find input dimension mapping for output dimension '{v['out_name']}'."
-                    )
-                bnds_var = input_dim + "_bnds"
-                bounds_rename_map[bnds_var] = v["out_name"] + "_bnds"
-                bnds_required.append(bnds_var)
-
-        # Select input variables
-        input_vars = self.mapping[self.cmor_name]["model_variables"]
-        calc = self.mapping[self.cmor_name]["calculation"]
-
-        required_vars = set(input_vars + bnds_required)
-        self.load_dataset(required_vars=required_vars)
-        self.sort_time_dimension()
-
-        # Calculate missing bounds variables
+    def calculate_missing_bounds_variables(self, bnds_required):
+        """Calculate missing bounds variables for coordinates."""
         for bnds_var in bnds_required:
             if bnds_var not in self.ds.data_vars and bnds_var not in self.ds.coords:
                 # Extract coordinate name by removing "_bnds" suffix
@@ -60,7 +34,7 @@ class CMIP6_Atmosphere_CMORiser(CMIP6_CMORiser):
                 warnings.warn(
                     f"'{bnds_var}' not found in raw data. Automatically calculating bounds for '{coord_name}' coordinate.",
                     UserWarning,
-                    stacklevel=2,
+                    stacklevel=3,
                 )
 
                 # Determine which calculation function to use based on coordinate name
@@ -90,62 +64,162 @@ class CMIP6_Atmosphere_CMORiser(CMIP6_CMORiser):
                 else:
                     # For other coordinates, we could add more handlers or skip
                     warnings.warn(
-                        f"No automatic calculation available for '{bnds_var}'. This may cause CMIP6 compliance issues.",
+                        f"No automatic calculation available for '{bnds_var}'. This may cause CMIP compliance issues.",
                         UserWarning,
-                        stacklevel=2,
+                        stacklevel=3,
                     )
+
+    def remove_spurious_time_dimensions(self, required_vars):
+        """
+        Remove spurious time dimensions from coordinate and auxiliary variables.
+
+        This method addresses a common issue in xarray when combining datasets:
+        spatial bounds (lat_bnds, lon_bnds) and other coordinate variables can incorrectly
+        gain time dimensions during multi-file dataset operations, even though they are time-invariant.
+
+        Why this is necessary:
+        - When using xr.open_mfdataset() with combine_coords="time", xarray
+          conservatively assumes all coordinate-linked variables might vary with time
+        - This causes spatial bounds and coordinates to be broadcasted along the time dimension
+        - Results in redundant data storage and non-CF-compliant files
+
+        Why this is reasonable for ACCESS Models:
+        - ACCESS Models use static grids throughout model runs
+        - Latitude, longitude coordinates (and their bounds) are time-invariant
+        - The grid definition remains constant across all timesteps
+        - Only time_bnds and data variables should legitimately have a time dimension
+        - This optimization is safe and improves storage efficiency
+
+        Args:
+            required_vars (list): Variables that should keep their time dimension
+        """
+        # Identify all variables that have gained spurious time dimensions
+        # Include bounds variables and any other coordinate variables
+        problematic_vars = [
+            name
+            for name in self.ds.variables
+            if "time" not in name  # Don't touch time_bnds or time coordinate
+            and name not in required_vars  # Don't touch required data variables
+            and name in self.ds
+            and "time" in self.ds[name].coords
+            and self.ds[name].dims != ("time",)  # Skip pure time variables
+        ]
+
+        if problematic_vars:
+            # Process all problematic variables efficiently in a single operation
+            corrections = {
+                name: self.ds[name].isel(time=0).drop_vars("time")
+                for name in problematic_vars
+            }
+            self.ds = self.ds.assign(corrections)
+
+    def select_and_process_variables(self):
+        # Check if this is an internal calculation that doesn't need input variables
+        calc = self.mapping[self.cmor_name]["calculation"]
+
+        if calc["type"] == "internal":
+            # For internal calculations, we don't need to load any input data
+            # Call the internal calculation function directly
+            func_name = calc["function"]
+            if func_name not in custom_functions:
+                raise ValueError(
+                    f"Internal calculation function '{func_name}' not found in custom_functions"
+                )
+
+            # Execute the internal function to generate the variable data
+            self.ds = custom_functions[func_name](**calc.get("kwargs", {}))
+
+            self.vocab._get_axes(
+                self.mapping
+            )  # Ensure axes are loaded for renaming later
+
+            # Ensure the CMOR variable exists
+            if self.cmor_name not in self.ds:
+                raise ValueError(
+                    f"Internal calculation function '{func_name}' did not generate variable '{self.cmor_name}'"
+                )
+
+            return
+
+        # Original logic for other calculation types
+        # Select input variables required for the CMOR variable
+        required_vars = self.mapping[self.cmor_name]["model_variables"]
+
+        required_axes, axes_rename_map = self.vocab._get_axes(self.mapping)
+        required_bounds, bounds_rename_map = self.vocab._get_required_bounds_variables(
+            self.mapping
+        )
+
+        required = set(
+            required_vars
+            + list(axes_rename_map.keys())
+            + list(bounds_rename_map.keys())
+        )
+        self.load_dataset(required_vars=required)
+
+        # Remove spurious time dimensions from spatial bounds and coordinates
+        self.remove_spurious_time_dimensions(required_vars)
+
+        # Ensure time dimension is sorted
+        self.sort_time_dimension()
+
+        ## Calculate missing bounds variables
+        ##self.calculate_missing_bounds_variables(required_bounds)
 
         # Handle the calculation type
         if calc["type"] == "direct":
             # If the calculation is direct, just rename the variable
-            self.ds = self.ds.rename({input_vars[0]: self.cmor_name})
+            self.ds = self.ds.rename({required_vars[0]: self.cmor_name})
         elif calc["type"] == "formula":
             # If the calculation is a formula, evaluate it
-            context = {var: self.ds[var] for var in input_vars}
+            context = {var: self.ds[var] for var in required_vars}
             context.update(custom_functions)
             self.ds[self.cmor_name] = evaluate_expression(calc, context)
             # Drop the original input variables, except the CMOR variable and keep bounds
             self.ds = self.ds.drop_vars(
                 [
                     var
-                    for var in input_vars
-                    if var != self.cmor_name and var not in bnds_required
+                    for var in required_vars
+                    if var != self.cmor_name and var not in required_bounds.keys()
                 ],
                 errors="ignore",
             )
+        elif calc["type"] == "dataset_function":
+            # Function that operates on the full dataset
+            func_name = calc["function"]
+            self.ds = self.ds.rename({required_vars[0]: self.cmor_name})
+            self.ds = custom_functions[func_name](self.ds, **calc.get("kwargs", {}))
         else:
             raise ValueError(f"Unsupported calculation type: {calc['type']}")
 
-        # Rename dimensions according to the CMOR vocabulary
-        dim_rename = self.mapping[self.cmor_name]["dimensions"]
-        dims_to_rename = {k: v for k, v in dim_rename.items() if k in self.ds.dims}
-        self.ds = self.ds.rename(dims_to_rename)
+        # Rename axes and bounds variables
+        rename_map = {
+            k: v
+            for k, v in {**bounds_rename_map, **axes_rename_map}.items()
+            if k in self.ds
+        }
 
-        # Also rename coordinates if needed
-        coords_to_rename = {k: v for k, v in dim_rename.items() if k in self.ds.coords}
-        if coords_to_rename:
-            self.ds = self.ds.rename(coords_to_rename)
+        # Drop any existing variables that have the same names as our target names
+        conflicting_vars = [
+            v
+            for v in rename_map.values()
+            if v in self.ds and v not in rename_map.keys()
+        ]
+        if conflicting_vars:
+            self.ds = self.ds.drop_vars(conflicting_vars, errors="ignore")
 
-        # Rename bounds variables
-        for bnds_var, out_bnds_name in bounds_rename_map.items():
-            if bnds_var in self.ds:
-                self.ds = self.ds.rename({bnds_var: out_bnds_name})
-            elif bnds_var in self.ds.coords:
-                self.ds = self.ds.rename({bnds_var: out_bnds_name})
-            # trim 'time' dimention of lat_bnds and lon_bnds
-            if "time" not in out_bnds_name and "time" in self.ds[out_bnds_name].coords:
-                self.ds[out_bnds_name] = (
-                    self.ds[out_bnds_name].isel(time=0).drop_vars("time")
-                )
-
-        # Update "bounds" attribute in all variables and coordinates
-        for var in list(self.ds.variables) + list(self.ds.coords):
-            bounds_attr = self.ds[var].attrs.get("bounds")
-            if bounds_attr and bounds_attr in bounds_rename_map:
-                self.ds[var].attrs["bounds"] = bounds_rename_map[bounds_attr]
+        self.ds = self.ds.rename(rename_map)
 
         # Transpose the data variable according to the CMOR dimensions
-        cmor_dims = self.vocab.variable["dimensions"].split()
+        # Handle both string and list dimension formats
+        dimensions = self.vocab.variable["dimensions"]
+        try:
+            # Try treating as string (space-separated)
+            cmor_dims = re.sub(r"\w*level", "lev", dimensions).split()
+        except TypeError:
+            # If re.sub() fails (TypeError for list input), it's already a list
+            cmor_dims = [re.sub(r"\w*level", "lev", dim) for dim in dimensions]
+
         transpose_order = [
             self.vocab.axes[dim]["out_name"]
             for dim in cmor_dims

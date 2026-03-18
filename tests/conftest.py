@@ -155,7 +155,7 @@ def load_filtered_variables(model_id="ACCESS-ESM1.6", component=None, table_name
                 variables.extend(list(all_mappings[component].keys()))
         else:
             # Get variables from all components if no specific component requested
-            for comp in ["atmosphere", "land", "ocean"]:
+            for comp in ["atmosphere", "land", "ocean", "sea_ice"]:
                 if comp in all_mappings:
                     variables.extend(list(all_mappings[comp].keys()))
 
@@ -170,7 +170,7 @@ def load_filtered_variables(model_id="ACCESS-ESM1.6", component=None, table_name
             "Omon": "ocean",
             "Oday": "ocean",
             "Oyr": "ocean",
-            "SImon": "ocean",
+            "SImon": "sea_ice",
         }
 
         # Special handling for Emon table which includes variables from multiple components
@@ -209,7 +209,7 @@ def _filter_variables_by_test_data(variables, table_name):
     that we know work with the standard test data files.
     """
     # Known working variables for each table based on test data availability
-    # These are variables that have been confirmed to work with the aiihca.pa-101909_mon.nc test file
+    # These are variables that have been confirmed to work with the aiihca.pa-298810_mon.nc test file
     test_data_compatible_vars = {
         "Amon": [
             "rldscs",  # Surface Downwelling Longwave Radiation assuming Clear Sky
@@ -233,21 +233,270 @@ def _filter_variables_by_test_data(variables, table_name):
             "rsdt",  # TOA Incident Shortwave Radiation
             "rsut",  # TOA Outgoing Shortwave Radiation
             "rlut",  # TOA Outgoing Longwave Radiation
+            "cli",  # Mass Fraction of cloud ice in air
+            "rluscs",
+            "rsdscs",
+            "rsuscs",
+            "rsutcs",
+            "rtmt",
+            "cl",
+            "clivi",
+            "clw",
+            "hur",
+            "hus",
+            "prc",
+            "prsn",
+            "prw",
+            "ta",
+            "tasmax",
+            "tasmin",
+            "tauu",
+            "tauv",
+            "ts",
+            "ua",
+            "va",
+            "wap",
+            "zg",
+            "sfcWind",
         ],
+        "AERmon": ["od550aer", "pfull", "phalf", "ua", "va"],
         "Lmon": [
-            # For land variables, we need different test data files
-            # For now, return a minimal set for basic testing
-            "mrso",  # Total Soil Moisture Content (if soil data available)
+            "mrso",
+            "mrsos",
+            "cLeaf",
+            "cLitter",
+            "cRoot",
+            "cProduct",
+            "baresoilFrac",
+            "c3PftFrac",
+            "c4PftFrac",
+            "cSoilFast",
+            "cSoilMedium",
+            "cSoilSlow",
+            "cropFrac",
+            "grassFrac",
+            "npp",
+            "nbp",
+            "ra",
+            "rh",
+            "residualFrac",
+            "shrubFrac",
+            "treeFrac",
+            "lai",
         ],
         "Emon": [
-            # Only variables that actually exist in the Emon CMIP6 table
-            # AND are compatible with the test data (aiihca.pa-101909_mon.nc)
-            # From atmosphere component:
-            "hus",  # Specific Humidity
-            "ps",  # Surface Air Pressure
-            "ua",  # Eastward Wind
-            "va",  # Northward Wind
-            # Note: co23D and cSoil exist in Emon but have dimension issues with test data
+            "cLand",
+            "cSoil",
+            "cropFracC3",
+            "fBNF",
+            "fDeforestToProduct",
+            "fNdep",
+            "fNgas",
+            "fNleach",
+            "fNloss",
+            "fNnetmin",
+            "fNup",
+            "fProductDecomp",
+            "grassFracC3",
+            "grassFracC4",
+            "mrsfl",
+            "mrsll",
+            "mrsol",
+            "nep",
+            "nLand",
+            "nLitter",
+            "nMineral",
+            "nProduct",
+            "nSoil",
+            "nVeg",
+            "orog",
+            "treeFracBdlDcd",
+            "treeFracBdlEvg",
+            "treeFracNdlDcd",
+            "treeFracNdlEvg",
+            "vegFrac",
+            "vegHeight",
+            "wetlandFrac",
+        ],
+        "fx": [
+            "areacella",  # Cell area on native grid
+            "orog",  # Surface orography
+        ],
+        "Omon": [
+            # Ocean variables that are commonly available and suitable for testing
+            "evs",  # Water Evaporation Flux from Sea Water
+            "thetao",  # Sea Water Potential Temperature
+            "so",  # Sea Water Salinity
+            "uo",  # Sea Water X Velocity
+            "vo",  # Sea Water Y Velocity
+            "zos",  # Sea Surface Height Above Geoid
+            "mlotst",  # Ocean Mixed Layer Thickness Defined by Sigma T
+            "thkcello",  # Cell Thickness
+            "volcello",  # Ocean Grid-Cell Volume
+            "areacello",  # Ocean Grid-Cell Area
+            "sftof",  # Sea Area Fraction
+            "wfo",  # Water Flux into Sea Water
+            "pbo",  # Sea Water Pressure at Sea Floor
+            "tob",  # Sea Water Potential Temperature at Sea Floor
+            "sob",  # Sea Water Salinity at Sea Floor
+            "tos",  # Sea Surface Temperature
+            "sos",  # Sea Surface Salinity
+            "bigthetao",  # Sea Water Conservative Temperature
+            "agessc",  # Sea Water Age Since Surface Contact
+            "ficeberg2d",  # Iceberg Calving Flux
+            "bigthetaoga",  # Sea Water Conservative Temperature on Ocean Grid at Sea Surface
+            "hfbasinpmadv",  # Heat Flux at Basin Level
+            "hfevapds",  # Heat Flux due to Evaporation
+            "hfrainds",  # Heat Flux due to Rain
+            "htovgyre",  # Heat Transport by Gyre
+            "htovovrt",  # Heat Transport by Overturning
+            "masscello",  # Ocean Mass
+            "mfo",  # Ocean Mass Flux
+            "mlotst",  # Ocean Mixed Layer Thickness
+            "msftmrho",  # Ocean Surface Temperature
+            "msftmz",  # Ocean Surface Salinity
+            "msftyrho",  # Ocean Surface Density
+            "pbo",  # Sea Water Pressure at Sea Floor
+            "sltovgyre",  # Salt Transport by Gyre
+            "sltovovrt",  # Salt Transport by Overturning
+            "so",  # Sea Water Salinity
+            "sob",  # Sea Water Salinity at Sea Floor
+            "soga",  # Sea Water Salinity on Ocean Grid at Sea Surface
+            "sos",  # Sea Surface Salinity
+            "sosga",  # Sea Surface Salinity on Ocean Grid at Sea Surface
+            "tauuo",  # Zonal Wind Stress
+            "tauvo",  # Meridional Wind Stress
+            "thetaoga",  # Sea Water Conservative Temperature on Ocean Grid at Sea Surface
+            "tob",  # Sea Water Potential Temperature at Sea Floor
+            "umo",  # Sea Water X Velocity on Ocean Grid
+            "uo",  # Sea Water X Velocity
+            "vmo",  # Sea Water Y Velocity on Ocean Grid
+            "vo",  # Sea Water Y Velocity
+            "volo",  # Ocean Grid-Cell Volume
+            "wo",  # Sea Water Vertical Velocity
+        ],
+        "Ofx": [
+            "areacello",  # Ocean Grid-Cell Area
+            "deptho",  # Ocean Depth
+            "masscello",  # Ocean Mass
+            "thkcello",  # Cell Thickness
+        ],
+        "CFmon": [
+            "hur",
+            "hus",
+            "ta",
+        ],
+        # Daily frequency (day table)
+        "day": [
+            "clt",
+            "hfls",
+            "hfss",
+            "hurs",
+            "hursmax",
+            "hursmin",
+            "huss",
+            "mrro",
+            "mrsos",
+            "mrso",
+            "prc",
+            "prsn",
+            "psl",
+            "rlds",
+            "rlus",
+            "rlut",
+            "rsds",
+            "rsus",
+            "sfcWind",
+            "sfcWindmax",
+            "tas",
+            "tasmax",
+            "tasmin",
+            "uas",
+            "vas",
+        ],
+        "Eday": [
+            "lai",
+            "mrsfl",
+            "mrsll",
+            "mrsol",
+        ],
+        "3hr": [
+            "clt",
+            "huss",
+            "hfls",
+            "hfss",
+            "pr",
+            "prsn",
+            "ps",
+            "rlds",
+            "rlus",
+            "rsus",
+            "rsds",
+            "tas",
+        ],
+        "6hrPlev": [
+            "hurs",
+            "psl",
+            "sfcWind",
+            "tas",
+            "uas",
+            "vas",
+        ],
+        "6hrPlevPt": [
+            "hus",
+            "ps",
+            "ta",
+            "ua",
+            "va",
+        ],
+        "SImon": [
+            "siage",
+            "siconc",
+            "sidconcdyn",
+            "sidconcth",
+            "siareaacrossline",
+            "siarean",
+            "siareas",
+            "siconca",
+            "sidivvel",
+            "sidmassdyn",
+            "sidmassth",
+            "sidmassmeltlat",
+            "sidmassevapsubl",
+            "sidmassgrowthsi",
+            "sidmassgrowthbot",
+            "sidmassgrowthwat",
+            "sidmassmeltbot",
+            "sidmassmelttop",
+            "sisndmasssi",
+            "sifb",
+            "sidmasstranx",
+            "sidmasstrany",
+            "siextentn",
+            "siextents",
+            "siflfwbot",
+            "simass",
+            "simassacrossline",
+            "sisnconc",
+            "sisnhc",
+            "sisnthick",
+            "sispeed",
+            "sistrxdtop",
+            "sistrxubot",
+            "sistrydtop",
+            "sistryubot",
+            "sitempbot",
+            "sitemptop",
+            "sisndmassmelt",
+            "sisndmasssnf",
+            "sisnmassn",
+            "sisnmasss",
+            "sithick",
+            "siv",
+            "siu",
+            "sivol",
+            "sivoln",
+            "sivols",
         ],
     }
 
