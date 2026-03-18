@@ -31,6 +31,10 @@ module load conda/analysis3-26.02
 # 显式加载 4.1+ 可修复此问题。
 module load openmpi/4.1.2
 
+# 使用本地 ACCESS-MOPPy，而非 conda 环境中安装的版本
+export MOPPY_DIR=/g/data/tm70/yz9299/ARE/ACCESS-MOPPy
+export PYTHONPATH="${MOPPY_DIR}:${PYTHONPATH:-}"
+
 export PBS_MEM_GB=64
 export OMP_NUM_THREADS=1
 
