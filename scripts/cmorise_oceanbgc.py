@@ -60,11 +60,6 @@ VARIANT_LABEL = "r1i1p1f1"
 GRID_LABEL    = "gn"
 ACTIVITY_ID   = "CMIP"
 
-# Dask LocalCluster 配置
-DASK_N_WORKERS   = 4
-DASK_THREADS_PER_WORKER = 2
-DASK_MEMORY_LIMIT = "8GB"   # 每 worker 内存上限
-
 # ── 变量 → 文件前缀映射 ──────────────────────────────────────────────────────
 #
 # key   : CMIP6 compound name（table.variable）
@@ -290,8 +285,6 @@ def print_summary(results: list[dict]) -> None:
 
 
 def main() -> None:
-    from dask.distributed import Client, LocalCluster
-
     print("=" * 60)
     print("  MOPPy 批量 CMORisation — oceanbgc Oyr 变量")
     print("=" * 60)
@@ -326,21 +319,13 @@ def main() -> None:
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    # 启动 Dask LocalCluster 提升 I/O 与计算效率
-    print(f"  启动 Dask LocalCluster（{DASK_N_WORKERS} workers × "
-          f"{DASK_THREADS_PER_WORKER} threads, {DASK_MEMORY_LIMIT}/worker）…")
-    with LocalCluster(
-        n_workers=DASK_N_WORKERS,
-        threads_per_worker=DASK_THREADS_PER_WORKER,
-        memory_limit=DASK_MEMORY_LIMIT,
-    ) as cluster, Client(cluster) as client:
-        print(f"  Dask dashboard: {client.dashboard_link}")
-        print()
-
-        results = []
-        for variable in VARIABLES:
-            result = cmorise_variable(variable, OUTPUT_DIR)
-            results.append(result)
+    # 不在外层创建 Dask Client —— ACCESS_ESM_CMORiser 内部会自行管理 Dask，
+    # 若此处同时持有全局 Client，moppy 关闭其内部 client 时会连带关闭全局
+    # client，导致后续变量处理时出现 ClosedClientError。
+    results = []
+    for variable in VARIABLES:
+        result = cmorise_variable(variable, OUTPUT_DIR)
+        results.append(result)
 
     print_summary(results)
 

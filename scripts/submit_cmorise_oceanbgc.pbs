@@ -38,12 +38,6 @@ export PYTHONPATH="${MOPPY_DIR}:${PYTHONPATH:-}"
 export PBS_MEM_GB=64
 export OMP_NUM_THREADS=1
 
-# Dask worker 数量与 PBS ncpus 对齐（脚本内 DASK_N_WORKERS=4，
-# 剩余 CPUs 供主进程及 I/O 使用）
-export DASK_DISTRIBUTED__WORKER__MEMORY__TARGET=0.85
-export DASK_DISTRIBUTED__WORKER__MEMORY__SPILL=0.90
-export DASK_DISTRIBUTED__WORKER__MEMORY__PAUSE=0.95
-
 export TMPDIR=${PBS_JOBFS}/tmp
 mkdir -p "${TMPDIR}"
 
