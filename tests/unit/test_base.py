@@ -1435,3 +1435,130 @@ class TestCMIP6CMORiserWrite:
             with nc.Dataset(output_files[0], "r") as ds_nc:
                 assert "type_strlen" in ds_nc.dimensions
                 assert ds_nc.dimensions["type_strlen"].size == 11
+
+
+class TestEnsureTimeFirstDimension:
+    """Unit tests for CMORiser.ensure_time_first_dimension()."""
+
+    @pytest.fixture
+    def mock_vocab(self):
+        vocab = Mock()
+        vocab.get_table = Mock(return_value={})
+        return vocab
+
+    @pytest.fixture
+    def mock_mapping(self):
+        return {
+            "CF standard Name": "air_temperature",
+            "units": "K",
+            "dimensions": {"time": "time", "lat": "lat", "lon": "lon"},
+            "positive": None,
+        }
+
+    @pytest.fixture
+    def cmoriser(self, mock_vocab, mock_mapping, tmp_path):
+        return CMORiser(
+            input_paths=["test.nc"],
+            output_path=str(tmp_path),
+            vocab=mock_vocab,
+            variable_mapping=mock_mapping,
+            compound_name="Amon.tas",
+        )
+
+    @pytest.mark.unit
+    def test_time_already_first_unchanged(self, cmoriser):
+        """Variable with time already first should not be modified."""
+        data = np.zeros((3, 4, 5))
+        ds = xr.Dataset({"tas": (["time", "lat", "lon"], data)})
+        cmoriser.ds = ds
+        cmoriser.cmor_name = "tas"
+
+        cmoriser.ensure_time_first_dimension()
+
+        assert cmoriser.ds["tas"].dims == ("time", "lat", "lon")
+
+    @pytest.mark.unit
+    def test_time_moved_to_first_from_last(self, cmoriser):
+        """Variable with time last should be transposed so time comes first."""
+        data = np.zeros((4, 5, 3))
+        ds = xr.Dataset({"tas": (["lat", "lon", "time"], data)})
+        cmoriser.ds = ds
+        cmoriser.cmor_name = "tas"
+
+        cmoriser.ensure_time_first_dimension()
+
+        assert cmoriser.ds["tas"].dims[0] == "time"
+        assert set(cmoriser.ds["tas"].dims) == {"time", "lat", "lon"}
+
+    @pytest.mark.unit
+    def test_time_moved_to_first_preserves_other_dim_order(self, cmoriser):
+        """Remaining dims after time should keep their relative order."""
+        data = np.zeros((4, 6, 5, 3))
+        ds = xr.Dataset({"ua": (["lat", "plev", "lon", "time"], data)})
+        cmoriser.ds = ds
+        cmoriser.cmor_name = "ua"
+
+        cmoriser.ensure_time_first_dimension()
+
+        assert cmoriser.ds["ua"].dims == ("time", "lat", "plev", "lon")
+
+    @pytest.mark.unit
+    def test_no_time_dimension_unchanged(self, cmoriser):
+        """Variable without a time dimension should not be modified."""
+        data = np.zeros((4, 5))
+        ds = xr.Dataset({"areacello": (["lat", "lon"], data)})
+        cmoriser.ds = ds
+        cmoriser.cmor_name = "areacello"
+
+        cmoriser.ensure_time_first_dimension()
+
+        assert cmoriser.ds["areacello"].dims == ("lat", "lon")
+
+    @pytest.mark.unit
+    def test_dataset_without_time_dim_skipped(self, cmoriser):
+        """Dataset with no time dimension should be left unchanged."""
+        data = np.zeros((4, 5))
+        ds = xr.Dataset({"areacello": (["lat", "lon"], data)})
+        cmoriser.ds = ds
+        cmoriser.cmor_name = "areacello"
+
+        # Should not raise and should be a no-op
+        cmoriser.ensure_time_first_dimension()
+
+        assert list(cmoriser.ds.dims) == ["lat", "lon"]
+
+    @pytest.mark.unit
+    def test_data_values_preserved_after_transpose(self, cmoriser):
+        """Transposing should not alter underlying data values."""
+        rng = np.random.default_rng(42)
+        data = rng.random((4, 5, 3))
+        ds = xr.Dataset({"tas": (["lat", "lon", "time"], data)})
+        cmoriser.ds = ds
+        cmoriser.cmor_name = "tas"
+
+        cmoriser.ensure_time_first_dimension()
+
+        # After transpose to (time, lat, lon), shape is (3, 4, 5)
+        result = cmoriser.ds["tas"].values
+        assert result.shape == (3, 4, 5)
+        # Check one element matches original
+        assert result[1, 2, 3] == data[2, 3, 1]
+
+    @pytest.mark.unit
+    def test_multiple_data_vars_all_transposed(self, cmoriser):
+        """All data variables with time not first should be transposed."""
+        data1 = np.zeros((4, 5, 3))
+        data2 = np.zeros((6, 4, 5, 3))
+        ds = xr.Dataset(
+            {
+                "tas": (["lat", "lon", "time"], data1),
+                "ua": (["plev", "lat", "lon", "time"], data2),
+            }
+        )
+        cmoriser.ds = ds
+        cmoriser.cmor_name = "tas"
+
+        cmoriser.ensure_time_first_dimension()
+
+        assert cmoriser.ds["tas"].dims[0] == "time"
+        assert cmoriser.ds["ua"].dims[0] == "time"
