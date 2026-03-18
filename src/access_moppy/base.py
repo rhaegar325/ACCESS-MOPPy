@@ -717,7 +717,7 @@ class CMORiser:
         raise NotImplementedError("Subclasses must implement update_attributes.")
 
     def reorder(self):
-        def ordered(ds, core=("lat", "lon", "time", "height")):
+        def ordered(ds, core=("time", "lat", "lon", "height")):
             seen = set()
             order = []
             for name in core:
