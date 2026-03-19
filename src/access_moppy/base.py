@@ -737,24 +737,52 @@ class CMORiser:
 
     def ensure_time_first_dimension(self):
         """
-        Ensure `time` is the first dimension in all CMORised variables.
+        Ensure `time` is the first dimension everywhere in the dataset.
 
         CMIP tables do not always list `time` first (e.g. `longitude latitude time`),
         but actual CMIP6 NetCDF files follow the NetCDF convention of placing the
         unlimited record dimension first: `(time, [vertical], lat, lon)`.
 
-        This method transposes any variable (data variable or coordinate variable)
-        whose leading dimension is not `time` while preserving the relative order of
-        the remaining dimensions.
+        This method:
+        1. Transposes every variable whose leading dimension is not `time`.
+        2. Reconstructs the dataset so that `time` is also first in the
+           dataset-level dimension ordering (``ds.sizes``, ``ds.coords``).
+
+        The per-variable ``transpose()`` alone only fixes the dimension order
+        *within* each variable; the dataset's canonical dimension ordering
+        (which controls ``ds.sizes`` key order and ``ds.coords`` display order)
+        is determined by the order dimensions are first *encountered* across
+        variables.  Placing time-related variables first in the reconstruction
+        dict guarantees ``time`` is encountered first.
         """
         if "time" not in self.ds.dims:
             return
 
+        # Step 1: transpose individual variables so time leads
         for var in list(self.ds.variables):
             dims = list(self.ds[var].dims)
             if "time" in dims and dims[0] != "time":
                 new_order = ["time"] + [d for d in dims if d != "time"]
                 self.ds[var] = self.ds[var].transpose(*new_order)
+
+        # Step 2: rebuild the dataset with time-related variables first so that
+        # the dataset-level dimension ordering (ds.sizes, ds.coords) also has
+        # time as the leading dimension.
+        current_sizes = list(self.ds.sizes.keys())
+        if current_sizes and current_sizes[0] == "time":
+            return  # already correct at the dataset level
+
+        ordered_vars = {}
+        # Time coordinate and its bounds first – this introduces the 'time' dim
+        for name in ("time", "time_bnds"):
+            if name in self.ds.variables:
+                ordered_vars[name] = self.ds[name]
+        # Then every other variable in its existing order
+        for name in self.ds.variables:
+            if name not in ordered_vars:
+                ordered_vars[name] = self.ds[name]
+
+        self.ds = xr.Dataset(ordered_vars, attrs=self.ds.attrs)
 
     def _build_drs_path(self, attrs: Dict[str, str]) -> Path:
         """
