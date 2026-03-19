@@ -129,7 +129,9 @@ class TestCMIP6PlusVocabulary:
         assert filename == "tas_Amon_ACCESS-CM2_historical_r1i1p1f1_gn.nc"
 
     @pytest.mark.unit
-    def test_generate_filename_compact_template_is_normalized(self, vocabulary_instance):
+    def test_generate_filename_compact_template_is_normalized(
+        self, vocabulary_instance
+    ):
         ds = xr.Dataset({"rsds": xr.DataArray([[280.0]], dims=["x", "y"])})
         attrs = {
             "variable_id": "rsds",
