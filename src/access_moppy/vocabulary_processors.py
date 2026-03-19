@@ -799,8 +799,26 @@ class CMIP6Vocabulary:
 
         drs_templates = self._load_drs_templates()
         filename_template = drs_templates["filename_template"]
+        ordered_keys = re.findall(r"<([^>]+)>", filename_template)
+        template_without_placeholders = re.sub(r"<[^>]+>", "", filename_template)
 
-        rendered_filename = self._render_template(filename_template, template_vars)
+        is_compact_placeholder_template = (
+            len(ordered_keys) > 1
+            and template_without_placeholders.strip() == ""
+            and "[" not in filename_template
+            and "]" not in filename_template
+        )
+
+        if is_compact_placeholder_template:
+            rendered_parts = []
+            for key in ordered_keys:
+                value = template_vars.get(key)
+                if value not in (None, ""):
+                    rendered_parts.append(str(value))
+            rendered_filename = "_".join(rendered_parts)
+        else:
+            rendered_filename = self._render_template(filename_template, template_vars)
+
         if not rendered_filename.endswith(".nc"):
             rendered_filename += ".nc"
 

@@ -129,6 +129,34 @@ class TestCMIP6PlusVocabulary:
         assert filename == "tas_Amon_ACCESS-CM2_historical_r1i1p1f1_gn.nc"
 
     @pytest.mark.unit
+    def test_generate_filename_compact_template_is_normalized(self, vocabulary_instance):
+        ds = xr.Dataset({"rsds": xr.DataArray([[280.0]], dims=["x", "y"])})
+        attrs = {
+            "variable_id": "rsds",
+            "table_id": "Amon",
+            "source_id": "ACCESS-ESM1-5",
+            "experiment_id": "piControl-spinup",
+            "variant_label": "r1i1p1f1",
+            "grid_label": "gn",
+        }
+
+        with patch.object(
+            CMIP6PlusVocabulary,
+            "_load_drs_templates",
+            return_value={
+                "filename_template": "<variable_id><table_id><source_id><experiment_id><member_id><grid_label>"
+            },
+        ):
+            filename = vocabulary_instance.generate_filename(
+                attrs=attrs,
+                ds=ds,
+                cmor_name="rsds",
+                compound_name="Amon.rsds",
+            )
+
+        assert filename == "rsds_Amon_ACCESS-ESM1-5_piControl-spinup_r1i1p1f1_gn.nc"
+
+    @pytest.mark.unit
     def test_build_drs_path_uses_cmip6plus_mip_era(self, vocabulary_instance):
         with patch.object(
             CMIP6PlusVocabulary,
