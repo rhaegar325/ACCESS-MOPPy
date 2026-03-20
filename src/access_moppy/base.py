@@ -787,6 +787,17 @@ class CMORiser:
             if info["is_scalar"] or name not in self.ds.dims:
                 aux_coords.append(name)
 
+        # Also include non-string scalar coordinates (e.g. float 'height') that are not
+        # dimension coordinates. These must also appear in the 'coordinates' attribute so
+        # that xarray (and other CF-compliant readers) recognise them as coordinates rather
+        # than data variables when the file is read back.
+        for coord_name in self.ds.coords:
+            coord = self.ds[coord_name]
+            is_scalar = coord.ndim == 0
+            is_non_dim = coord_name not in self.ds.dims
+            if (is_scalar or is_non_dim) and coord_name not in aux_coords:
+                aux_coords.append(coord_name)
+
         attrs = self.ds.attrs
 
         # Get required attributes from the vocabulary (works for both CMIP6 and CMIP7)
