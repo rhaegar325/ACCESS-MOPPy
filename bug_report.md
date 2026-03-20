@@ -1,117 +1,143 @@
-# Bug: `coordinates` attribute containing stale scalar coordinate reference persists in CMORised output
+# Bug: Scalar height coordinate from raw data not renamed to CMIP6-standard `height` during CMORisation
 
 ## Summary
 
-When CMORising near-surface variables (e.g. `tas`), the output NetCDF file contains a
-`coordinates = "height_0"` attribute on the data variable, but the `height_0` variable
-itself does not exist in the file. This produces a broken/invalid CMIP6 output.
+Near-surface variables (e.g. `tas`) in the raw ACCESS model output carry a scalar
+coordinate named `height_0` (written by iris). During CMORisation this coordinate is
+never renamed to the CMIP6-standard name `height`, causing the output file to reference
+a non-existent variable and `height` to appear as a plain variable rather than a
+coordinate.
 
-## Root Cause (Two Compounding Issues)
+## Background: What the raw data contains
 
-### Issue 1: `decode_cf=False` preserves raw `coordinates` attribute
+The iris-written NetCDF file stores `height_0` as a scalar coordinate on `fld_s03i236`:
 
-`base.py` opens input files with `decode_cf=False`:
+```
+float fld_s03i236(...) ;
+    fld_s03i236:coordinates = "height_0" ;   ← raw CF attribute
+
+double height_0 ;                            ← scalar coordinate variable
+    height_0:standard_name = "height" ;
+    height_0:units = "m" ;
+    height_0:value = 1.5 ;
+```
+
+When opened with `decode_cf=True` (xarray default), xarray **consumes** the
+`coordinates` attribute and promotes `height_0` into a proper coordinate object, so
+`.attrs` no longer contains it. When opened with `decode_cf=False` (as `base.py` does),
+the raw attribute `coordinates = "height_0"` is preserved in `.attrs` unchanged.
+
+## Root Cause
+
+### Step 1 — `height_0` is never included in `required` variables
+
+In `select_and_process_variables()` (`atmosphere.py`), the set of variables to load is:
 
 ```python
-xr.open_mfdataset(..., decode_cf=False)  # base.py:384
+required = set(required_vars + list(axes_rename_map.keys()) + list(bounds_rename_map.keys()))
 ```
 
-The original model output (written by iris) stores a raw NetCDF attribute on
-`fld_s03i236`:
+`height_0` does not appear in any of these lists because the mapping's `dimensions`
+dict has no `height` key that maps back to `height_0`. So `height_0` is never loaded
+into `self.ds`.
 
-```
-fld_s03i236:coordinates = "height_0" ;
-```
+### Step 2 — The stale `coordinates = "height_0"` attr is silently inherited
 
-With `decode_cf=True` (xarray default), this attribute is **consumed**: xarray promotes
-`height_0` into a proper coordinate object and removes it from `.attrs`. With
-`decode_cf=False`, the attribute is **preserved as-is** in `.attrs`. After renaming
-`fld_s03i236` → `tas`, the stale attribute is inherited:
+Because `decode_cf=False` preserves the raw attribute, after renaming:
 
 ```python
+self.ds = self.ds.rename({"fld_s03i236": "tas"})
 self.ds["tas"].attrs["coordinates"]  # → "height_0"
 ```
 
-This can be confirmed by opening the same file two ways:
+`tas` now carries a `coordinates` attribute that points to `height_0`, but `height_0`
+was never loaded — it does not exist in `self.ds`.
+
+### Step 3 — Substring match prevents the correct `height` coordinate from being added
+
+Later in `base.py`, when appending auxiliary coordinates to the `coordinates` attribute:
 
 ```python
-ds_cf  = xr.open_dataset(file)                   # decode_cf=True  → no "coordinates" in attrs
-ds_raw = xr.open_dataset(file, decode_cf=False)  # → attrs["coordinates"] = "height_0"
+existing_coords = vdat.attrs.get("coordinates", "")          # → "height_0"
+coords_to_add = [c for c in aux_coords if c not in existing_coords]  # substring match!
 ```
 
-### Issue 2: Substring match prevents correct `height` coordinate from being added
-
-In `base.py`, when building the `coordinates` attribute for the output file:
-
-```python
-existing_coords = vdat.attrs.get("coordinates", "")
-coords_to_add = [c for c in aux_coords if c not in existing_coords]  # ← substring match!
-```
-
-Because `"height" in "height_0"` evaluates to `True`, the correct CMIP6 `height`
-scalar coordinate (value = 2.0 m) is silently skipped and never written. The output
-file ends up with:
+`"height" in "height_0"` is `True`, so the CMIP6-standard `height` scalar coordinate
+is silently skipped. The output file ends up with:
 
 ```
-tas:coordinates = "height_0" ;   ← references a variable that doesn't exist
-```
-
-instead of:
-
-```
-tas:coordinates = "height" ;     ← correct CMIP6 scalar coordinate
+tas:coordinates = "height_0" ;   ← dangling reference, height_0 does not exist
 ```
 
 ## Full Bug Chain
 
 ```
-Original NetCDF (iris-written)
- └─ fld_s03i236:coordinates = "height_0"
-         ↓  open_mfdataset(decode_cf=False)   raw attr preserved
- └─ ds["fld_s03i236"].attrs["coordinates"] = "height_0"
-         ↓  ds.rename({"fld_s03i236": "tas"}) attrs inherited
+iris-written NetCDF
+ └─ fld_s03i236:coordinates = "height_0"  (height_0 scalar coord exists in file)
+         ↓  open_mfdataset(decode_cf=False)
+            height_0 not in `required` → never loaded into self.ds
+ └─ ds["fld_s03i236"].attrs["coordinates"] = "height_0"  (stale, dangling)
+         ↓  ds.rename({"fld_s03i236": "tas"})
  └─ ds["tas"].attrs["coordinates"] = "height_0"
-         ↓  "height" in "height_0" → True     height skipped
- └─ coords_to_add = []                         height never written
-         ↓  setncattr("coordinates", "height_0")
- └─ Output file: tas:coordinates = "height_0"  ← dangling reference, invalid output
+         ↓  "height" in "height_0" → True  → height skipped by substring check
+ └─ output: tas:coordinates = "height_0"   ← variable doesn't exist → invalid CMIP6
 ```
 
 ## Expected Behaviour
 
-Output file should contain a valid `height` scalar coordinate at 2.0 m:
+The CMORisation pipeline should recognise `height_0` as the raw-data representation of
+the CMIP6 `height` coordinate and rename it accordingly. The output should be:
 
 ```
 double height ;
+    height:standard_name = "height" ;
     height:long_name = "height" ;
     height:units = "m" ;
     height:positive = "up" ;
     height:axis = "Z" ;
-    height:standard_name = "height" ;
-tas:coordinates = "height" ;
+
+tas:coordinates = "height" ;   ← valid CMIP6 scalar coordinate
 ```
 
 ## Suggested Fix
 
-**Fix 1** — Strip the stale `coordinates` attr after loading (or before renaming):
+Three changes are needed together:
+
+**Fix 1** — Include scalar coordinates listed in `coordinates` attr in `required`,
+and add them to the rename map so `height_0` → `height`:
 
 ```python
-# After load_dataset / before or after rename
+# In select_and_process_variables(), after building `required`:
+raw_coord_attr = self.ds[self.cmor_name].attrs.get("coordinates", "")
+for raw_coord_name in raw_coord_attr.split():
+    # find the CMIP6 standard name for this coordinate and add to rename map
+    required.add(raw_coord_name)
+    axes_rename_map[raw_coord_name] = "height"  # resolve via vocab lookup
+```
+
+**Fix 2** — Clear the stale `coordinates` attr after loading so it does not
+propagate to the output:
+
+```python
 if "coordinates" in self.ds[self.cmor_name].attrs:
     del self.ds[self.cmor_name].attrs["coordinates"]
 ```
 
-**Fix 2** — Use whole-word matching instead of substring check:
+**Fix 3** — Use whole-word matching instead of substring check when building
+the output `coordinates` attribute:
 
 ```python
 existing = set(existing_coords.split())
 coords_to_add = [c for c in aux_coords if c not in existing]
 ```
 
-Both fixes should be applied together.
+## Affected Variables
+
+Any near-surface variable whose iris-written source file carries a scalar height
+coordinate under a name other than `height` (e.g. `height_0`, `height_1`), including
+but not limited to: `tas`, `huss`, `uas`, `vas`, `sfcWind`.
 
 ## Environment
 
-- Variable: `tas` (and likely any near-surface variable with a scalar height coordinate)
-- Input format: ACCESS model output converted via iris → NetCDF
-- Affected file: `base.py` (load_dataset + coordinates attribute writing logic)
+- Input format: ACCESS model output written by iris → NetCDF
+- Affected files: `atmosphere.py` (`select_and_process_variables`), `base.py` (load + coordinates attribute writing)
