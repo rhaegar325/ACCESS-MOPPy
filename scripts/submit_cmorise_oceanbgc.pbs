@@ -32,8 +32,13 @@ module load conda/analysis3-26.02
 module load openmpi/4.1.2
 
 # 使用本地 ACCESS-MOPPy，而非 conda 环境中安装的版本
+# 在 jobfs 中创建轻量虚拟环境，继承 conda 的所有依赖，
+# 再用 pip install -e 将本地 moppy 安装进去（优先级高于 conda 中的版本）
 export MOPPY_DIR=/g/data/tm70/yz9299/ARE/ACCESS-MOPPy
-export PYTHONPATH="${MOPPY_DIR}:${PYTHONPATH:-}"
+VENV_DIR=${PBS_JOBFS}/venv
+python -m venv --system-site-packages "${VENV_DIR}"
+source "${VENV_DIR}/bin/activate"
+pip install --no-deps -e "${MOPPY_DIR}"
 
 export PBS_MEM_GB=64
 export OMP_NUM_THREADS=1
