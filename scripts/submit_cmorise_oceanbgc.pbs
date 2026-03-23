@@ -38,7 +38,7 @@ export MOPPY_DIR=/g/data/tm70/yz9299/ARE/ACCESS-MOPPy
 VENV_DIR=${PBS_JOBFS}/venv
 python -m venv --system-site-packages "${VENV_DIR}"
 source "${VENV_DIR}/bin/activate"
-pip install --no-deps -e "${MOPPY_DIR}"
+pip install --no-build-isolation --no-deps -e "${MOPPY_DIR}"
 
 export PBS_MEM_GB=64
 export OMP_NUM_THREADS=1
