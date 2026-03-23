@@ -2648,6 +2648,74 @@ def load_cmip6_to_cmip7_mapping(mapping_path: Optional[str] = None) -> Dict[str,
     return mapping
 
 
+def get_requested_variables_from_data_request(
+    experiment: str = "historical",
+    priority: str = "Core",
+    variable_name: str = "CMIP6",
+    dreq_version: str = "v1.2.2.3",
+) -> List[str]:
+    """
+    Return requested variables for a given experiment and priority from a data request.
+
+    Args:
+        experiment: Experiment key under ``requested["experiment"]``.
+        priority: Priority class key (for example ``"Core"``).
+        variable_name: Variable naming convention to use; must be ``"CMIP6"`` or
+            ``"CMIP7"``.
+        dreq_version: Data request version string to retrieve.
+
+    Returns:
+        A list of requested variable names.
+
+    Raises:
+        ValueError: If ``variable_name`` is not ``"CMIP6"`` or ``"CMIP7"``.
+        ImportError: If ``DATA_REQUEST_API_AVAILABLE`` is ``False``.
+
+    Example:
+        >>> get_requested_variables_from_data_request("historical", "Core")
+    """
+    if variable_name not in ("CMIP6", "CMIP7"):
+        raise ValueError(
+            f"Invalid variable_name {variable_name!r}. Must be 'CMIP6' or 'CMIP7'."
+        )
+
+    if not DATA_REQUEST_API_AVAILABLE:
+        raise ImportError(
+            "data_request_api package is required for querying requested variables. "
+            "Install it with: pip install CMIP7-data-request-api"
+        )
+
+    from data_request_api.content import dreq_content as dc
+    from data_request_api.query import dreq_query as dq
+    from data_request_api.utilities.config import update_config
+
+    update_config("variable_name", f"{variable_name} Compound Name")
+
+    dc.retrieve(dreq_version)
+    dreq_content = dc.load(dreq_version)
+    dreq_tables = dq.create_dreq_tables_for_request(
+        content=dreq_content,
+        dreq_version=dreq_version,
+    )
+    requested = dq.get_requested_variables(
+        content=dreq_tables,
+        dreq_version=dreq_version,
+        verbose=False,
+        check_core_variables=False,
+        priority_cutoff=priority.lower(),
+    )
+
+    if experiment not in requested.get("experiment", {}):
+        raise KeyError(f"Experiment '{experiment}' not found in data request.")
+
+    if priority.capitalize() not in requested["experiment"][experiment]:
+        raise KeyError(
+            f"Priority '{priority}' not found for experiment '{experiment}' in data request."
+        )
+
+    return list(requested["experiment"][experiment][priority.capitalize()])
+
+
 def get_cmip_mapping_metadata(mapping_type: str = "forward") -> Dict:
     """
     Get metadata about the CMIP7↔CMIP6 compound name mapping files.
