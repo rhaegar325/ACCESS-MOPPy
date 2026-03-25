@@ -952,13 +952,13 @@ class CMIP6Vocabulary:
         """
         license_info = self.source.get("license_info", {})
         institution = self.source["institution_id"][0]
-        license_id = license_info.get("id", "CC BY 4.0")
+        license = license_info.get("license")
         license_url = license_info.get(
             "url", "https://creativecommons.org/licenses/by/4.0/"
         )
         return (
             f"CMIP6 model data produced by {institution} is licensed under a "
-            f"{license_id} License ({license_url}). Consult "
+            f"{license} License ({license_url}). Consult "
             "https://pcmdi.llnl.gov/CMIP6/TermsOfUse for terms of use governing "
             "CMIP6 output, including citation requirements and proper "
             "acknowledgment. Further information about this data, including some "
