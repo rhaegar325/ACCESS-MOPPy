@@ -1,0 +1,104 @@
+# Batch CMORisation configuration — Feb26-PI-CNP-concentrations (ACCESS-ESM1-6)
+# Run with: python -m access_moppy.batch_cmoriser batch_config_Feb26_PI_CNP.yml
+
+# Variables to process (one PBS job per variable)
+variables:
+  # --- Emon ---
+  - Emon.cSoil
+  # --- Lmon ---
+  - Lmon.cVeg
+  - Lmon.gpp
+  - Lmon.lai
+  - Lmon.nbp
+  - Lmon.ra
+  - Lmon.rh
+  - Lmon.tsl
+  - Lmon.mrro
+  # --- Amon ---
+  - Amon.evspsbl
+  - Amon.hfls
+  - Amon.hfss
+  - Amon.hurs
+  - Amon.pr
+  - Amon.rlds
+  - Amon.rlus
+  - Amon.rsds
+  - Amon.rsus
+  - Amon.tasmax
+  - Amon.tasmin
+  - Amon.tas
+  # --- Omon ---
+  # Omon.hfds  # TODO: add ocean file pattern once known
+
+# CMIP6 metadata
+experiment_id: historical
+source_id: ACCESS-ESM1-5
+variant_label: r1i1p1f1
+grid_label: gn
+activity_id: CMIP
+
+# Input and output paths
+input_folder: "/g/data/p73/archive/CMIP7/ACCESS-ESM1-6/spinup/Feb26-PI-CNP-concentrations"
+output_folder: "/scratch/tm70/yz9299/ilamb_variables"
+
+# File patterns (relative to input_folder)
+# All atmosphere/land variables share the same pattern
+file_patterns:
+  Emon.cSoil:  "/output00[0-9]/atmosphere/netCDF/*mon.nc"
+  Lmon.cVeg:   "/output00[0-9]/atmosphere/netCDF/*mon.nc"
+  Lmon.gpp:    "/output00[0-9]/atmosphere/netCDF/*mon.nc"
+  Lmon.lai:    "/output00[0-9]/atmosphere/netCDF/*mon.nc"
+  Lmon.nbp:    "/output00[0-9]/atmosphere/netCDF/*mon.nc"
+  Lmon.ra:     "/output00[0-9]/atmosphere/netCDF/*mon.nc"
+  Lmon.rh:     "/output00[0-9]/atmosphere/netCDF/*mon.nc"
+  Lmon.tsl:    "/output00[0-9]/atmosphere/netCDF/*mon.nc"
+  Lmon.mrro:   "/output00[0-9]/atmosphere/netCDF/*mon.nc"
+  Amon.evspsbl: "/output00[0-9]/atmosphere/netCDF/*mon.nc"
+  Amon.hfls:   "/output00[0-9]/atmosphere/netCDF/*mon.nc"
+  Amon.hfss:   "/output00[0-9]/atmosphere/netCDF/*mon.nc"
+  Amon.hurs:   "/output00[0-9]/atmosphere/netCDF/*mon.nc"
+  Amon.pr:     "/output00[0-9]/atmosphere/netCDF/*mon.nc"
+  Amon.rlds:   "/output00[0-9]/atmosphere/netCDF/*mon.nc"
+  Amon.rlus:   "/output00[0-9]/atmosphere/netCDF/*mon.nc"
+  Amon.rsds:   "/output00[0-9]/atmosphere/netCDF/*mon.nc"
+  Amon.rsus:   "/output00[0-9]/atmosphere/netCDF/*mon.nc"
+  Amon.tasmax: "/output00[0-9]/atmosphere/netCDF/*mon.nc"
+  Amon.tasmin: "/output00[0-9]/atmosphere/netCDF/*mon.nc"
+  Amon.tas:    "/output00[0-9]/atmosphere/netCDF/*mon.nc"
+
+# PBS job configuration (defaults for all variables)
+queue: "normal"
+cpus_per_node: 14
+mem: "32GB"
+jobfs: 100GB
+walltime: "02:00:00"
+scheduler_options: "#PBS -P iq82"
+storage: "gdata/tm70+gdata/xp65+gdata/p73+scratch/tm70"
+
+# Variable-specific resource overrides
+variable_resources:
+  # tsl has a depth dimension — larger arrays in memory
+  Lmon.tsl:
+    cpus_per_node: 14
+    mem: 48GB
+    walltime: "02:00:00"
+  # Multi-field carbon pool variables require combining 5–7 model fields
+  Emon.cSoil:
+    cpus_per_node: 14
+    mem: 48GB
+    walltime: "03:00:00"
+  Lmon.cVeg:
+    cpus_per_node: 14
+    mem: 48GB
+    walltime: "03:00:00"
+  Lmon.nbp:
+    cpus_per_node: 14
+    mem: 48GB
+    walltime: "03:00:00"
+
+# Environment setup
+worker_init: |
+  module use /g/data/xp65/public/modules
+  module load conda/analysis3
+
+wait_for_completion: false
