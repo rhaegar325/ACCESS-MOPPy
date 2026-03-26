@@ -159,6 +159,52 @@ class TestCMIP6PlusVocabulary:
         assert filename == "rsds_Amon_ACCESS-ESM1-5_piControl-spinup_r1i1p1f1_gn.nc"
 
     @pytest.mark.unit
+    def test_generate_filename_compact_template_includes_time_range(
+        self, vocabulary_instance
+    ):
+        import numpy as np
+
+        time_values = np.array([0.0, 11.0])
+        time_coord = xr.DataArray(
+            time_values,
+            dims=["time"],
+            attrs={"units": "months since 1981-01-01", "calendar": "gregorian"},
+        )
+        ds = xr.Dataset(
+            {
+                "tas": xr.DataArray(
+                    [280.0, 281.0],
+                    dims=["time"],
+                    coords={"time": time_coord},
+                )
+            }
+        )
+        attrs = {
+            "variable_id": "tas",
+            "table_id": "Amon",
+            "source_id": "ACCESS-ESM1-5",
+            "experiment_id": "piControl",
+            "variant_label": "r1i1p1f1",
+            "grid_label": "gn",
+        }
+
+        with patch.object(
+            CMIP6PlusVocabulary,
+            "_load_drs_templates",
+            return_value={
+                "filename_template": "<variable_id><table_id><source_id><experiment_id><member_id><grid_label>"
+            },
+        ):
+            filename = vocabulary_instance.generate_filename(
+                attrs=attrs,
+                ds=ds,
+                cmor_name="tas",
+                compound_name="Amon.tas",
+            )
+
+        assert filename == "tas_Amon_ACCESS-ESM1-5_piControl_r1i1p1f1_gn_198101-198112.nc"
+
+    @pytest.mark.unit
     def test_build_drs_path_uses_cmip6plus_mip_era(self, vocabulary_instance):
         with patch.object(
             CMIP6PlusVocabulary,
