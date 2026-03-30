@@ -225,6 +225,11 @@ class Atmosphere_CMORiser(CMORiser):
             for dim in cmor_dims
             if "value" not in self.vocab.axes[dim]
         ]
+        # Drop auxiliary time_0 dimension (present in some land variables e.g. cVeg, cSoil)
+        # time_0 is not a CMOR dimension and may have size > 1, so squeeze won't catch it
+        if "time_0" in self.ds[self.cmor_name].dims and "time_0" not in transpose_order:
+            self.ds = self.ds.isel(time_0=0, drop=True)
+
         # Squeeze singleton dimensions if they are not in the transpose order
         for dim in self.ds[self.cmor_name].dims:
             if dim not in transpose_order and self.ds[self.cmor_name][dim].size == 1:
