@@ -23,7 +23,7 @@ from access_moppy.atmosphere import Atmosphere_CMORiser
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_vocab(dimensions="lat lon", units="kg m-2"):
+def _make_vocab(dimensions="time lat lon", units="kg m-2"):
     """Return a minimal mock vocabulary object."""
     vocab = MagicMock()
     vocab.variable = {"dimensions": dimensions, "units": units, "type": "double"}
@@ -39,7 +39,7 @@ def _make_vocab(dimensions="lat lon", units="kg m-2"):
     return vocab
 
 
-def _make_cmoriser(ds, cmor_name, dimensions="lat lon", units="kg m-2", tmp_path=None):
+def _make_cmoriser(ds, cmor_name, dimensions="time lat lon", units="kg m-2", tmp_path=None):
     """
     Instantiate an Atmosphere_CMORiser with a pre-loaded xarray Dataset.
     The instance's internal ds is replaced after init so we can inject
@@ -103,7 +103,7 @@ class TestTime0DimensionHandling:
             },
         )
 
-        cmoriser = _make_cmoriser(ds, "cVeg", dimensions="lat lon", tmp_path=tmp_path)
+        cmoriser = _make_cmoriser(ds, "cVeg", dimensions="time lat lon", tmp_path=tmp_path)
 
         # Bypass full load_dataset; inject ds directly and run only the
         # transpose/squeeze portion via select_and_process_variables.
@@ -136,7 +136,7 @@ class TestTime0DimensionHandling:
             },
         )
 
-        cmoriser = _make_cmoriser(ds, "cVeg", dimensions="lat lon", tmp_path=tmp_path)
+        cmoriser = _make_cmoriser(ds, "cVeg", dimensions="time lat lon", tmp_path=tmp_path)
 
         with patch.object(cmoriser, "load_dataset"):
             cmoriser.ds = ds.copy()
@@ -161,7 +161,7 @@ class TestTime0DimensionHandling:
             },
         )
 
-        cmoriser = _make_cmoriser(ds, "tas", dimensions="lat lon", units="K",
+        cmoriser = _make_cmoriser(ds, "tas", dimensions="time lat lon", units="K",
                                   tmp_path=tmp_path)
 
         with patch.object(cmoriser, "load_dataset"):
@@ -189,7 +189,7 @@ class TestTime0DimensionHandling:
             },
         )
 
-        cmoriser = _make_cmoriser(ds, "tas", dimensions="lat lon", units="K",
+        cmoriser = _make_cmoriser(ds, "tas", dimensions="time lat lon", units="K",
                                   tmp_path=tmp_path)
 
         with patch.object(cmoriser, "load_dataset"):
@@ -234,7 +234,7 @@ class TestFormulaUnitsClearing:
             },
         )
 
-        vocab = _make_vocab(dimensions="lat lon", units="kg m-2")
+        vocab = _make_vocab(dimensions="time lat lon", units="kg m-2")
         vocab._get_axes.return_value = ([], {})
         vocab._get_required_bounds_variables.return_value = ({}, {})
 
@@ -289,7 +289,7 @@ class TestFormulaUnitsClearing:
             },
         )
 
-        cmoriser = _make_cmoriser(ds, "fld_tas", dimensions="lat lon", units="K",
+        cmoriser = _make_cmoriser(ds, "fld_tas", dimensions="time lat lon", units="K",
                                   tmp_path=tmp_path)
         # Patch the mapping to direct-rename fld_tas → tas
         cmoriser.mapping = {
@@ -331,7 +331,7 @@ class TestFormulaUnitsClearing:
             },
         )
 
-        vocab = _make_vocab(dimensions="lat lon", units="kg m-2")
+        vocab = _make_vocab(dimensions="time lat lon", units="kg m-2")
         vocab._get_axes.return_value = ([], {})
         vocab._get_required_bounds_variables.return_value = ({}, {})
 
