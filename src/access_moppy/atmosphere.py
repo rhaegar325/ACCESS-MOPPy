@@ -175,6 +175,10 @@ class Atmosphere_CMORiser(CMORiser):
             context = {var: self.ds[var] for var in required_vars}
             context.update(custom_functions)
             self.ds[self.cmor_name] = evaluate_expression(calc, context)
+            # Clear inherited units attribute: formula calculations transform units mathematically
+            # (e.g. g m-2 / 1000 -> kg m-2), so the input variable's units attribute is no longer
+            # valid. The correct CMOR units will be applied by update_attributes().
+            self.ds[self.cmor_name].attrs.pop("units", None)
             # Drop the original input variables, except the CMOR variable and keep bounds
             self.ds = self.ds.drop_vars(
                 [
