@@ -18,7 +18,6 @@ import xarray as xr
 
 from access_moppy.atmosphere import Atmosphere_CMORiser
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -48,7 +47,7 @@ def _make_cmoriser(
     The instance's internal ds is replaced after init so we can inject
     arbitrary test data without going through load_dataset().
     """
-    import tempfile, pathlib
+    import tempfile
 
     out = str(tmp_path or tempfile.mkdtemp())
     vocab = _make_vocab(dimensions=dimensions, units=units)
@@ -119,9 +118,9 @@ class TestTime0DimensionHandling:
             # vocab._get_axes / _get_required_bounds_variables already mocked
             cmoriser.select_and_process_variables()
 
-        assert "time_0" not in cmoriser.ds["cVeg"].dims, (
-            "time_0 should have been dropped before transpose"
-        )
+        assert (
+            "time_0" not in cmoriser.ds["cVeg"].dims
+        ), "time_0 should have been dropped before transpose"
 
     @pytest.mark.unit
     def test_time0_singleton_still_dropped(self, tmp_path):
@@ -227,7 +226,6 @@ class TestFormulaUnitsClearing:
         After a formula-type calculation, the result variable must have
         no units attribute so that the CMOR units can be applied cleanly.
         """
-        from access_moppy.derivations import custom_functions, evaluate_expression
 
         nt, nlat, nlon = 3, 5, 5
         data = np.ones((nt, nlat, nlon), dtype=np.float32)
