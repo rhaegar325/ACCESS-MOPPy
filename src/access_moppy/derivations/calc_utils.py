@@ -396,9 +396,13 @@ def calculate_monthly_minimum(
             f"Time coordinate '{time_dim}' not found in data array coordinates"
         )
 
+    # Decode time coordinate if loaded with decode_cf=False (numeric Index)
+    if not np.issubdtype(da[time_dim].dtype, np.datetime64) and da[time_dim].dtype != object:
+        da = xr.decode_cf(da.to_dataset(name="__tmp"))["__tmp"]
+
     # Perform monthly resampling using minimum (lazy operation)
     try:
-        monthly_min = da.resample({time_dim: "M"}).min(keep_attrs=preserve_attrs)
+        monthly_min = da.resample({time_dim: "ME"}).min(keep_attrs=preserve_attrs)
 
         if preserve_attrs:
             # Update cell_methods to reflect the temporal aggregation
@@ -471,9 +475,13 @@ def calculate_monthly_maximum(
             f"Time coordinate '{time_dim}' not found in data array coordinates"
         )
 
+    # Decode time coordinate if loaded with decode_cf=False (numeric Index)
+    if not np.issubdtype(da[time_dim].dtype, np.datetime64) and da[time_dim].dtype != object:
+        da = xr.decode_cf(da.to_dataset(name="__tmp"))["__tmp"]
+
     # Perform monthly resampling using maximum (lazy operation)
     try:
-        monthly_max = da.resample({time_dim: "M"}).max(keep_attrs=preserve_attrs)
+        monthly_max = da.resample({time_dim: "ME"}).max(keep_attrs=preserve_attrs)
 
         if preserve_attrs:
             # Update cell_methods to reflect the temporal aggregation
