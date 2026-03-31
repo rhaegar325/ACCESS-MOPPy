@@ -174,7 +174,35 @@ class Atmosphere_CMORiser(CMORiser):
             # If the calculation is a formula, evaluate it
             context = {var: self.ds[var] for var in required_vars}
             context.update(custom_functions)
-            self.ds[self.cmor_name] = evaluate_expression(calc, context)
+            result = evaluate_expression(calc, context)
+
+            # If the formula changed the time resolution (e.g. daily→monthly for tasmax/tasmin),
+            # rebuild self.ds around the result to avoid xarray silently reindexing it back
+            # to the original time coordinate.
+            if (
+                "time" in result.dims
+                and result.sizes["time"] != self.ds.sizes.get("time", result.sizes["time"])
+            ):
+                # Keep only time-independent variables (lat_bnds, lon_bnds, etc.)
+                time_indep = {
+                    v: self.ds[v]
+                    for v in self.ds.data_vars
+                    if "time" not in self.ds[v].dims and v not in required_vars
+                }
+                time_indep_coords = {
+                    c: self.ds[c]
+                    for c in self.ds.coords
+                    if "time" not in self.ds[c].dims and c != "time"
+                }
+                self.ds = result.to_dataset(name=self.cmor_name)
+                for v, da in time_indep.items():
+                    self.ds[v] = da
+                self.ds = self.ds.assign_coords(
+                    {c: v for c, v in time_indep_coords.items() if c not in self.ds.coords}
+                )
+            else:
+                self.ds[self.cmor_name] = result
+
             # Drop the original input variables, except the CMOR variable and keep bounds
             self.ds = self.ds.drop_vars(
                 [
