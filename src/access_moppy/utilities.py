@@ -824,12 +824,18 @@ def _validate_monthly_compatibility(
         monthly_min = 20 * 86400  # 20 days in seconds
         monthly_max = 35 * 86400  # 35 days in seconds
 
-        if not (monthly_min <= freq_seconds <= monthly_max):
-            # If concatenated detection doesn't give monthly range, validate individual files
+        if freq_seconds > monthly_max:
+            # Frequency is longer than monthly (e.g. seasonal) - validate individually
             print(
-                f"⚠️  Concatenated frequency ({detected_freq}) not in monthly range, validating individual files..."
+                f"⚠️  Concatenated frequency ({detected_freq}) exceeds monthly range, validating individual files..."
             )
             return _validate_monthly_files_individually(file_paths, time_coord)
+        elif freq_seconds < monthly_min:
+            # Sub-monthly input (daily, 3hr, 6hr) - valid for monthly aggregation formulas
+            print(
+                f"📆 Sub-monthly input detected ({detected_freq}) - valid for monthly aggregation"
+            )
+            return detected_freq
 
         print(
             f"📅 Validated monthly data with calendar variations (detected: {detected_freq})"
@@ -874,18 +880,22 @@ def _validate_monthly_files_individually(
     monthly_min = 20 * 86400  # 20 days in seconds
     monthly_max = 35 * 86400  # 35 days in seconds
 
-    non_monthly_files = []
+    # Sub-monthly frequencies (daily, 3hr, 6hr, etc.) are valid for monthly
+    # aggregation formulas (e.g. calculate_monthly_maximum/minimum).
+    # Only reject frequencies that are longer than a calendar month (> 35 days),
+    # as those cannot be aggregated up to monthly.
+    incompatible_files = []
     for file_path, freq in file_info:
         freq_seconds = freq.total_seconds()
-        if not (monthly_min <= freq_seconds <= monthly_max):
-            non_monthly_files.append((file_path, freq))
+        if freq_seconds > monthly_max:
+            incompatible_files.append((file_path, freq))
 
-    if non_monthly_files:
-        error_msg = "Files do not appear to be monthly data:\n"
-        for file_path, freq in non_monthly_files:
+    if incompatible_files:
+        error_msg = "Files have frequency coarser than monthly and cannot be aggregated to monthly:\n"
+        for file_path, freq in incompatible_files:
             days = freq.total_seconds() / 86400
             error_msg += f"  {file_path}: {freq} ({days:.1f} days)\n"
-        error_msg += "\nExpected monthly files should be in range 20-35 days."
+        error_msg += "\nExpected input files with frequency <= 35 days (monthly or finer)."
         raise FrequencyMismatchError(error_msg)
 
     # All files are monthly - return a representative monthly frequency
