@@ -174,6 +174,8 @@ class Atmosphere_CMORiser(CMORiser):
             # If the calculation is a formula, evaluate it
             context = {var: self.ds[var] for var in required_vars}
             context.update(custom_functions)
+            # Save original time attrs before formula (decode_cf moves them to encoding)
+            orig_time_attrs = self.ds["time"].attrs.copy() if "time" in self.ds else {}
             result = evaluate_expression(calc, context)
 
             # If the formula changed the time resolution (e.g. daily→monthly for tasmax/tasmin),
@@ -200,6 +202,9 @@ class Atmosphere_CMORiser(CMORiser):
                 self.ds = self.ds.assign_coords(
                     {c: v for c, v in time_indep_coords.items() if c not in self.ds.coords}
                 )
+                # Restore original time attrs so generate_filename can read units/calendar
+                if orig_time_attrs and "time" in self.ds:
+                    self.ds["time"].attrs.update(orig_time_attrs)
             else:
                 self.ds[self.cmor_name] = result
 
