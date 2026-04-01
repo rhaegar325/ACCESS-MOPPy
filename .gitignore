@@ -6,3 +6,7 @@ src/access_moppy.egg-info
 .pixi
 notebooks/.ipynb_checkpoints
 *.nc
+# coverage reports
+.coverage
+htmlcov/
+coverage.xml
