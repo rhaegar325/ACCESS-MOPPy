@@ -824,6 +824,9 @@ class CMIP6Vocabulary:
                 value = template_vars.get(key)
                 if value not in (None, ""):
                     rendered_parts.append(str(value))
+            # Append time_range if available but absent from template
+            if "time_range" not in ordered_keys and template_vars.get("time_range"):
+                rendered_parts.append(str(template_vars["time_range"]))
             rendered_filename = "_".join(rendered_parts)
         else:
             rendered_filename = self._render_template(filename_template, template_vars)
@@ -958,38 +961,24 @@ class CMIP6Vocabulary:
         """
         license_info = self.source.get("license_info", {})
         institution = self.source["institution_id"][0]
-
-        entry = files(self.cv_dir) / self._cv_filename("license")
-
-        if not entry.exists():
-            raise FileNotFoundError(f"License CV file not found: {entry}")
-
-        with as_file(entry) as path:
-            with open(path, "r", encoding="utf-8") as f:
-                license_template = json.load(f)
-
-        # Perform placeholder substitutions
-        license_text = license_template["license"]["license"]
-        license_id = license_template["license"]["license_options"][
-            license_info.get("id")
-        ]["license_id"]
-        license_url = license_template["license"]["license_options"][
-            license_info.get("id")
-        ]["license_url"]
-        license_text = license_text.replace(
-            "<Your Institution; see CMIP6_institution_id.json>", institution
+        license = license_info.get("license")
+        license_url = license_info.get(
+            "url", "https://creativecommons.org/licenses/by/4.0/"
         )
-        license_text = license_text.replace(
-            "<Creative Commons; select and insert a license_id; see below>", license_id
+        return (
+            f"CMIP6 model data produced by {institution} is licensed under a "
+            f"{license} License ({license_url}). Consult "
+            "https://pcmdi.llnl.gov/CMIP6/TermsOfUse for terms of use governing "
+            "CMIP6 output, including citation requirements and proper "
+            "acknowledgment. Further information about this data, including some "
+            "limitations, can be found via the further_info_url (recorded as a "
+            "global attribute in this file). The data producers and data providers "
+            "make no warranty, either express or implied, including, but not "
+            "limited to, warranties of merchantability and fitness for a "
+            "particular purpose. All liabilities arising from the supply of the "
+            "information (including any liability arising in negligence) are "
+            "excluded to the fullest extent permitted by law."
         )
-        license_text = license_text.replace(
-            "<insert the matching license_url; see below>", license_url
-        )
-        license_text = license_text.replace(
-            "[ and at <some URL maintained by modeling group>]", ""
-        )
-
-        return license_text
 
     def build_drs_path(self, drs_root: Path, version_date: str) -> Path:
         """

@@ -208,6 +208,8 @@ class Atmosphere_CMORiser(CMORiser):
             else:
                 self.ds[self.cmor_name] = result
 
+            # Drop unit after calculation. update_attributes() will add the right units later on.
+            self.ds[self.cmor_name].attrs.pop("units", None)
             # Drop the original input variables, except the CMOR variable and keep bounds
             self.ds = self.ds.drop_vars(
                 [
@@ -258,6 +260,10 @@ class Atmosphere_CMORiser(CMORiser):
             for dim in cmor_dims
             if "value" not in self.vocab.axes[dim]
         ]
+
+        # trim time_0 after calculation
+        if "time_0" in self.ds[self.cmor_name].dims and "time_0" not in transpose_order:
+            self.ds = self.ds.isel(time_0=0, drop=True)
         # Squeeze singleton dimensions if they are not in the transpose order
         for dim in self.ds[self.cmor_name].dims:
             if dim not in transpose_order and self.ds[self.cmor_name][dim].size == 1:
