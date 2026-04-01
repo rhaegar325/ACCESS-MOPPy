@@ -1,6 +1,8 @@
 from pathlib import Path
 from unittest.mock import patch
 
+import numpy as np
+import pandas as pd
 import pytest
 import xarray as xr
 
@@ -173,3 +175,168 @@ class TestCMIP6PlusVocabulary:
             "/tmp/out/CMIP6Plus/CMIP/CSIRO-ARCCSS/ACCESS-CM2/historical/r1i1p1f1/Amon/tas/gn/v20260318"
         )
         assert drs_path == expected
+
+    # ------------------------------------------------------------------
+    # Tests for generate_filename time-type branches (lines 774-802)
+    # ------------------------------------------------------------------
+
+    _TIME_RANGE_TEMPLATE = {
+        "filename_template": "<variable_id>_<table_id>[_<time_range>]"
+    }
+    _ATTRS = {
+        "variable_id": "tas",
+        "table_id": "Amon",
+        "source_id": "ACCESS-CM2",
+        "experiment_id": "historical",
+        "variant_label": "r1i1p1f1",
+        "grid_label": "gn",
+    }
+
+    @pytest.mark.unit
+    def test_generate_filename_cftime_time_branch(self, vocabulary_instance):
+        """cftime objects (dtype=object) – uses hasattr(.year) branch."""
+        # cftime_range produces dtype=object time values
+        cf_time = xr.cftime_range("2020-01", periods=2, freq="MS", calendar="gregorian")
+        ds = xr.Dataset(
+            {
+                "tas": xr.DataArray(
+                    np.array([280.0, 281.0]),
+                    dims=["time"],
+                    coords={"time": cf_time},
+                )
+            }
+        )
+        assert ds["tas"].coords["time"].dtype == object  # Confirm precondition
+
+        with patch.object(
+            CMIP6PlusVocabulary,
+            "_load_drs_templates",
+            return_value=self._TIME_RANGE_TEMPLATE,
+        ):
+            filename = vocabulary_instance.generate_filename(
+                attrs=self._ATTRS, ds=ds, cmor_name="tas", compound_name="Amon.tas"
+            )
+
+        # Monthly format YYYYMM; two months → "202001-202002"
+        assert "202001-202002" in filename
+
+    @pytest.mark.unit
+    def test_generate_filename_datetime64_time_branch(self, vocabulary_instance):
+        """numpy datetime64 time – uses isinstance(np.datetime64) branch."""
+        dt_time = pd.date_range("2020-01-01", periods=2, freq="MS")
+        ds = xr.Dataset(
+            {
+                "tas": xr.DataArray(
+                    np.array([280.0, 281.0]),
+                    dims=["time"],
+                    coords={"time": dt_time},
+                )
+            }
+        )
+        assert np.issubdtype(ds["tas"].coords["time"].dtype, np.datetime64)
+
+        with patch.object(
+            CMIP6PlusVocabulary,
+            "_load_drs_templates",
+            return_value=self._TIME_RANGE_TEMPLATE,
+        ):
+            filename = vocabulary_instance.generate_filename(
+                attrs=self._ATTRS, ds=ds, cmor_name="tas", compound_name="Amon.tas"
+            )
+
+        assert "202001-202002" in filename
+
+    @pytest.mark.unit
+    def test_generate_filename_numeric_time_branch(self, vocabulary_instance):
+        """Numeric float64 time – uses num2date (else) branch."""
+        time_values = np.array([0.0, 31.0], dtype=np.float64)  # Jan, Feb 2020
+        ds = xr.Dataset(
+            {
+                "tas": xr.DataArray(
+                    np.array([280.0, 281.0]),
+                    dims=["time"],
+                    coords={
+                        "time": xr.Variable(
+                            "time",
+                            time_values,
+                            attrs={
+                                "units": "days since 2020-01-01",
+                                "calendar": "standard",
+                            },
+                        )
+                    },
+                )
+            }
+        )
+        assert ds["tas"].coords["time"].dtype == np.float64
+
+        with patch.object(
+            CMIP6PlusVocabulary,
+            "_load_drs_templates",
+            return_value=self._TIME_RANGE_TEMPLATE,
+        ):
+            filename = vocabulary_instance.generate_filename(
+                attrs=self._ATTRS, ds=ds, cmor_name="tas", compound_name="Amon.tas"
+            )
+
+        # 0 days since 2020-01-01 = Jan 2020; 31 days = Feb 2020
+        assert "202001" in filename
+        assert "202002" in filename
+
+    @pytest.mark.unit
+    def test_generate_filename_subdaily_format(self, vocabulary_instance):
+        """Sub-daily table produces YYYYMMDDHHMM format."""
+        dt_time = pd.date_range("2020-01-01 00:00", periods=2, freq="3h")
+        ds = xr.Dataset(
+            {
+                "tas": xr.DataArray(
+                    np.array([280.0, 281.0]),
+                    dims=["time"],
+                    coords={"time": dt_time},
+                )
+            }
+        )
+
+        attrs = {**self._ATTRS, "table_id": "3hr"}
+
+        with patch.object(
+            CMIP6PlusVocabulary,
+            "_load_drs_templates",
+            return_value=self._TIME_RANGE_TEMPLATE,
+        ):
+            filename = vocabulary_instance.generate_filename(
+                attrs=attrs, ds=ds, cmor_name="tas", compound_name="3hr.tas"
+            )
+
+        # Subdaily: YYYYMMDDHHMM  →  202001010000-202001010300
+        assert "202001010000" in filename
+        assert "202001010300" in filename
+
+    @pytest.mark.unit
+    def test_generate_filename_daily_format(self, vocabulary_instance):
+        """Daily table produces YYYYMMDD format."""
+        dt_time = pd.date_range("2020-01-01", periods=2, freq="D")
+        ds = xr.Dataset(
+            {
+                "tas": xr.DataArray(
+                    np.array([280.0, 281.0]),
+                    dims=["time"],
+                    coords={"time": dt_time},
+                )
+            }
+        )
+
+        attrs = {**self._ATTRS, "table_id": "day"}
+
+        with patch.object(
+            CMIP6PlusVocabulary,
+            "_load_drs_templates",
+            return_value=self._TIME_RANGE_TEMPLATE,
+        ):
+            filename = vocabulary_instance.generate_filename(
+                attrs=attrs, ds=ds, cmor_name="tas", compound_name="day.tas"
+            )
+
+        # Daily: YYYYMMDD  →  20200101-20200102
+        assert "20200101" in filename
+        assert "20200102" in filename
