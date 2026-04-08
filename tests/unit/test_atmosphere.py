@@ -1,13 +1,17 @@
 """
 Unit tests for Atmosphere_CMORiser.
 
-Covers two bug fixes in select_and_process_variables():
+Covers bug fixes in select_and_process_variables():
   1. time_0 non-singleton dimension is dropped before transpose
      (land variables such as cVeg/cSoil acquire a time_0 dimension > 1 when
      xarray broadcasts multiple model variables with differing dim orders)
   2. Inherited units attribute is cleared after formula calculations
      (raw PP variables carry units="1"; the formula converts to kg m-2 but
      xarray does not update the attribute, causing _check_units to fail)
+  3. soil_model_level_number is renamed to depth before transpose for tsl
+     (ACCESS-ESM1-5/1.6 soil temperature output uses soil_model_level_number
+     as the vertical dimension; the mapping must map it to the CMOR out_name
+     "depth" so that the transpose does not raise a ValueError)
 """
 
 from unittest.mock import MagicMock, patch
@@ -377,3 +381,106 @@ class TestFormulaUnitsClearing:
             cmoriser.ds = ds.copy()
             # select_and_process_variables must not raise due to units mismatch
             cmoriser.select_and_process_variables()
+
+
+# ---------------------------------------------------------------------------
+# Tests for Fix 3: soil_model_level_number renamed to depth for tsl
+# ---------------------------------------------------------------------------
+
+
+class TestSoilDepthDimension:
+    """
+    Ensure that a variable whose model vertical dimension is soil_model_level_number
+    (as in ACCESS-ESM1-5/1.6 UM output) is correctly renamed to the CMOR out_name
+    'depth' before the transpose, so that transpose() does not raise a ValueError.
+
+    Regression test for: ValueError: Dimensions {'depth'} do not exist.
+    Expected one or more of ('time', 'soil_model_level_number', 'lat', 'lon')
+    """
+
+    @pytest.mark.unit
+    def test_soil_model_level_number_renamed_to_depth(self, tmp_path):
+        """
+        soil_model_level_number must be renamed to 'depth' before the transpose
+        when the mapping specifies {"soil_model_level_number": "depth"}.
+
+        This reproduces the crash when running tsl (Lmon) with ACCESS-ESM1-5 data:
+          ValueError: Dimensions {'depth'} do not exist. Expected one or more of
+          ('time', 'soil_model_level_number', 'lat', 'lon')
+        """
+        import tempfile
+
+        nt, nz, nlat, nlon = 3, 4, 5, 5
+        data = np.ones((nt, nz, nlat, nlon), dtype=np.float32)
+
+        ds = xr.Dataset(
+            {
+                "fld_s08i225": (
+                    ["time", "soil_model_level_number", "lat", "lon"],
+                    data,
+                    {"units": "K"},
+                )
+            },
+            coords={
+                "time": np.arange(nt, dtype=float),
+                "soil_model_level_number": np.arange(1, nz + 1, dtype=float),
+                "lat": np.linspace(-90, 90, nlat),
+                "lon": np.linspace(0, 360, nlon),
+            },
+        )
+
+        vocab = MagicMock()
+        vocab.variable = {
+            "dimensions": "longitude latitude sdepth time",
+            "units": "K",
+            "type": "double",
+        }
+        vocab.axes = {
+            "longitude": {"out_name": "lon"},
+            "latitude": {"out_name": "lat"},
+            "sdepth": {"out_name": "depth"},
+            "time": {"out_name": "time"},
+        }
+        # _get_axes returns the rename map produced by the corrected mapping:
+        # model dim "soil_model_level_number" -> CMOR out_name "depth"
+        vocab._get_axes.return_value = (
+            {"sdepth": {"out_name": "depth"}},
+            {"soil_model_level_number": "depth"},
+        )
+        vocab._get_required_bounds_variables.return_value = ({}, {})
+
+        mapping = {
+            "tsl": {
+                "model_variables": ["fld_s08i225"],
+                "calculation": {"type": "direct", "formula": "fld_s08i225"},
+                "dimensions": {
+                    "time": "time",
+                    "soil_model_level_number": "depth",
+                    "lat": "lat",
+                    "lon": "lon",
+                },
+            }
+        }
+
+        cmoriser = Atmosphere_CMORiser(
+            input_data=ds,
+            output_path=str(tmp_path or tempfile.mkdtemp()),
+            vocab=vocab,
+            variable_mapping=mapping,
+            compound_name="Lmon.tsl",
+            validate_frequency=False,
+            enable_chunking=False,
+            enable_compression=False,
+        )
+
+        with patch.object(cmoriser, "load_dataset"):
+            cmoriser.ds = ds.copy()
+            # Must not raise ValueError about missing 'depth' dimension
+            cmoriser.select_and_process_variables()
+
+        assert "depth" in cmoriser.ds["tsl"].dims, (
+            "soil_model_level_number should have been renamed to 'depth'"
+        )
+        assert "soil_model_level_number" not in cmoriser.ds["tsl"].dims, (
+            "soil_model_level_number should have been renamed away"
+        )

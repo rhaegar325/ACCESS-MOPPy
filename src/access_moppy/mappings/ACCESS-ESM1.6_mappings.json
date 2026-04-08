@@ -3309,7 +3309,7 @@
         "tsl": {
             "dimensions": {
                 "time": "time",
-                "depth": "sdepth",
+                "soil_model_level_number": "depth",
                 "lat": "lat",
                 "lon": "lon"
             },
