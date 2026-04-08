@@ -3309,7 +3309,7 @@
         "tsl": {
             "dimensions": {
                 "time": "time",
-                "soil_model_level_number": "depth",
+                "depth": "depth",
                 "lat": "lat",
                 "lon": "lon"
             },
@@ -3319,8 +3319,11 @@
                 "fld_s08i225"
             ],
             "calculation": {
-                "type": "direct",
-                "formula": "fld_s08i225"
+                "type": "formula",
+                "operation": "calc_tsl",
+                "args": [
+                    "fld_s08i225"
+                ]
             },
             "CF standard Name": "soil_temperature"
         },

@@ -618,3 +618,53 @@ def calc_mrsol(var1):
         )
 
     return result
+
+
+def calc_tsl(var1):
+    """
+    Transform soil temperature from soil_model_level_number to depth coordinate.
+
+    Takes soil temperature (fld_s08i225) and replaces the integer
+    soil_model_level_number dimension with actual soil layer mid-point depth
+    values in metres, as required by the CMIP6 sdepth axis.
+
+    Parameters
+    ----------
+    var1 : xarray.DataArray
+        fld_s08i225 (soil temperature) with soil_model_level_number dimension.
+
+    Returns
+    -------
+    xarray.DataArray
+        Soil temperature with 'depth' coordinate (units: m) instead of
+        soil_model_level_number.
+    """
+
+    # Mid-point depths (m) for each CABLE soil layer (ACCESS-ESM1-5/1.6)
+    depths = {
+        1: 0.0109999999403954,
+        2: 0.0509999990463257,
+        3: 0.157000005245209,
+        4: 0.438499987125397,
+        5: 1.18550002574921,
+        6: 2.87199997901917,
+    }
+
+    result = var1
+
+    if "soil_model_level_number" in result.dims:
+        if "soil_model_level_number" in result.coords:
+            level_values = result["soil_model_level_number"].values
+        else:
+            level_size = result.sizes["soil_model_level_number"]
+            level_values = list(range(1, level_size + 1))
+
+        depth_values = [depths.get(int(lv), float("nan")) for lv in level_values]
+
+        result = (
+            result.assign_coords({"depth": ("soil_model_level_number", depth_values)})
+            .swap_dims({"soil_model_level_number": "depth"})
+            .drop_vars(["soil_model_level_number"], errors="ignore")
+        )
+
+    return result
