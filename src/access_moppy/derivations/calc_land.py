@@ -622,11 +622,10 @@ def calc_mrsol(var1):
 
 def calc_tsl(var1):
     """
-    Transform soil temperature from soil_model_level_number to depth coordinate.
+    Transform soil temperature coordinate from soil level indices to depth values.
 
-    Takes soil temperature (fld_s08i225) and replaces the integer
-    soil_model_level_number dimension with actual soil layer mid-point depth
-    values in metres, as required by the CMIP6 sdepth axis.
+    This function takes soil temperature (fld_s08i225) and transforms the
+    soil_model_level_number coordinate to depth values in metres.
 
     Parameters
     ----------
@@ -636,11 +635,10 @@ def calc_tsl(var1):
     Returns
     -------
     xarray.DataArray
-        Soil temperature with 'depth' coordinate (units: m) instead of
-        soil_model_level_number.
+        Soil temperature with depth coordinate instead of soil_model_level_number.
     """
 
-    # Mid-point depths (m) for each CABLE soil layer (ACCESS-ESM1-5/1.6)
+    # Soil depth mapping from model level numbers to depth values (meters)
     depths = {
         1: 0.0109999999403954,
         2: 0.0509999990463257,
@@ -650,17 +648,24 @@ def calc_tsl(var1):
         6: 2.87199997901917,
     }
 
+    # Use the variable directly
     result = var1
 
+    # Transform soil levels to depths if soil_model_level_number dimension exists
     if "soil_model_level_number" in result.dims:
+        # Get soil level coordinate/dimension
         if "soil_model_level_number" in result.coords:
-            level_values = result["soil_model_level_number"].values
+            soil_levels = result["soil_model_level_number"]
+            level_values = soil_levels.values
         else:
+            # If it's just a dimension, assume sequential levels 1,2,3,etc.
             level_size = result.sizes["soil_model_level_number"]
             level_values = list(range(1, level_size + 1))
 
-        depth_values = [depths.get(int(lv), float("nan")) for lv in level_values]
+        # Create depth values array (lazy operation)
+        depth_values = [depths.get(int(level), float("nan")) for level in level_values]
 
+        # Transform the result to use depth coordinate
         result = (
             result.assign_coords({"depth": ("soil_model_level_number", depth_values)})
             .swap_dims({"soil_model_level_number": "depth"})
