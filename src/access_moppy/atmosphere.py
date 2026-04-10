@@ -205,6 +205,8 @@ class Atmosphere_CMORiser(CMORiser):
                 # Restore original time attrs so generate_filename can read units/calendar
                 if orig_time_attrs and "time" in self.ds:
                     self.ds["time"].attrs.update(orig_time_attrs)
+                # Recalculate time bounds at the new (monthly) resolution
+                self.calculate_missing_bounds_variables(required_bounds)
             else:
                 self.ds[self.cmor_name] = result
 
