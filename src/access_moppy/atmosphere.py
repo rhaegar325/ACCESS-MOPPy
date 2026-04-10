@@ -242,6 +242,11 @@ class Atmosphere_CMORiser(CMORiser):
                 dim for dim in transpose_order if dim != "time"
             ]
 
+        if "lat" in transpose_order and "lon" in transpose_order:
+            if transpose_order.index("lat") > transpose_order.index("lon"):
+                transpose_order.remove("lat")
+                transpose_order.insert(transpose_order.index("lon"), "lat")
+
         self.ds[self.cmor_name] = self.ds[self.cmor_name].transpose(*transpose_order)
 
     def update_attributes(self):
