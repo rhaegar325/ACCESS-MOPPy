@@ -163,8 +163,8 @@ class Atmosphere_CMORiser(CMORiser):
         # Ensure time dimension is sorted
         self.sort_time_dimension()
 
-        ## Calculate missing bounds variables
-        ##self.calculate_missing_bounds_variables(required_bounds)
+        # Calculate missing bounds variables
+        self.calculate_missing_bounds_variables(required_bounds)
 
         # Handle the calculation type
         if calc["type"] == "direct":
