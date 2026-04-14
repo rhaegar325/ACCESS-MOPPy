@@ -21,10 +21,10 @@ class Atmosphere_CMORiser(CMORiser):
     def calculate_missing_bounds_variables(self, bnds_required):
         """Calculate missing bounds variables for coordinates."""
         for bnds_var in bnds_required:
-            if bnds_var not in self.ds.data_vars and bnds_var not in self.ds.coords:
-                # Extract coordinate name by removing "_bnds" suffix
-                coord_name = bnds_var.replace("_bnds", "")
+            # Extract coordinate name by removing "_bnds" suffix
+            coord_name = bnds_var.replace("_bnds", "")
 
+            if bnds_var not in self.ds.data_vars and bnds_var not in self.ds.coords:
                 if coord_name not in self.ds.coords:
                     raise ValueError(
                         f"Cannot calculate {bnds_var}: coordinate '{coord_name}' not found in dataset"
@@ -45,21 +45,18 @@ class Atmosphere_CMORiser(CMORiser):
                         time_coord=coord_name,
                         bnds_name="bnds",  # Atmosphere uses "bnds"
                     )
-                    self.ds[coord_name].attrs["bounds"] = bnds_var
 
                 elif coord_name in ["lat", "latitude", "y"]:
                     # Calculate latitude bounds - use "bnds" for atmosphere data
                     self.ds[bnds_var] = calculate_latitude_bounds(
                         self.ds, coord_name, bnds_name="bnds"
                     )
-                    self.ds[coord_name].attrs["bounds"] = bnds_var
 
                 elif coord_name in ["lon", "longitude", "x"]:
                     # Calculate longitude bounds - use "bnds" for atmosphere data
                     self.ds[bnds_var] = calculate_longitude_bounds(
                         self.ds, coord_name, bnds_name="bnds"
                     )
-                    self.ds[coord_name].attrs["bounds"] = bnds_var
 
                 else:
                     # For other coordinates, we could add more handlers or skip
@@ -68,6 +65,12 @@ class Atmosphere_CMORiser(CMORiser):
                         UserWarning,
                         stacklevel=3,
                     )
+                    continue
+
+            # Ensure the coordinate's bounds attribute always points to the bounds variable,
+            # regardless of whether it was just calculated or already existed in the input data.
+            if coord_name in self.ds.coords:
+                self.ds[coord_name].attrs["bounds"] = bnds_var
 
     def remove_spurious_time_dimensions(self, required_vars):
         """
