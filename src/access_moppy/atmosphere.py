@@ -166,9 +166,6 @@ class Atmosphere_CMORiser(CMORiser):
         # Ensure time dimension is sorted
         self.sort_time_dimension()
 
-        # Calculate missing bounds variables
-        self.calculate_missing_bounds_variables(required_bounds)
-
         # Handle the calculation type
         if calc["type"] == "direct":
             # If the calculation is direct, just rename the variable
@@ -214,6 +211,12 @@ class Atmosphere_CMORiser(CMORiser):
             self.ds = self.ds.drop_vars(conflicting_vars, errors="ignore")
 
         self.ds = self.ds.rename(rename_map)
+
+        # Calculate missing bounds variables after renaming so that
+        # coordinate names in self.ds match the output names in required_bounds
+        # (e.g. lat_v → lat, lon_u → lon).  Running this before rename would
+        # cause ValueError when input coord names differ from CMOR output names.
+        self.calculate_missing_bounds_variables(required_bounds)
 
         # Transpose the data variable according to the CMOR dimensions
         # Handle both string and list dimension formats
