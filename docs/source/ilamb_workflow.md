@@ -345,26 +345,70 @@ conn.commit()
 
 ## Output Structure
 
-CMORised files are written to `output_folder` following the CMIP6 DRS path
-convention (when `drs_root` is set) or a flat structure otherwise:
+There are two output modes depending on whether `drs_root` is set in the config.
+
+### Flat output (default — no `drs_root`)
+
+When `drs_root` is omitted, all CMORised files land directly in `output_folder`
+with no sub-directory hierarchy:
 
 ```
-YOUR_OUTPUT_PATH/
-├── CMIP/
-│   └── ACCESS-ESM1-5/
-│       └── historical/
-│           └── r1i1p1f1/
-│               ├── Amon/
-│               │   ├── pr/
-│               │   ├── tas/
-│               │   └── ...
-│               └── Lmon/
-│                   ├── gpp/
-│                   └── ...
+output_folder/
+├── pr_Amon_ACCESS-ESM1-5_historical_r1i1p1f1_gn_185001-201412.nc
+├── tas_Amon_ACCESS-ESM1-5_historical_r1i1p1f1_gn_185001-201412.nc
+├── gpp_Lmon_ACCESS-ESM1-5_historical_r1i1p1f1_gn_185001-201412.nc
 └── cmor_tasks.db
 ```
 
-These files can be passed directly to ILAMB via its `ILAMB_ROOT` configuration.
+### CMIP6 DRS output (recommended for ILAMB)
+
+Add a `drs_root` key to the batch config to write files into the full
+CMIP6 Data Reference Syntax directory tree.
+**`drs_root` is independent of `output_folder`** — the tracking database
+stays in `output_folder` while data files go under `drs_root`.
+
+```yaml
+# in batch_config_Feb26_PI_CNP.yml
+output_folder: "/scratch/tm70/$USER/ilamb_cmorised/historical-02"   # database & job scripts
+drs_root:      "/scratch/tm70/$USER/ilamb_cmorised/CMIP6"            # CMORised data
+```
+
+The resulting directory tree follows the CMIP6 template
+`<mip_era>/<activity_id>/<institution_id>/<source_id>/<experiment_id>/<member_id>/<table_id>/<variable_id>/<grid_label>/<version>`:
+
+```
+drs_root/
+└── CMIP6/
+    └── CMIP/
+        └── CSIRO/
+            └── ACCESS-ESM1-5/
+                └── historical/
+                    └── r1i1p1f1/
+                        ├── Amon/
+                        │   ├── pr/
+                        │   │   └── gn/
+                        │   │       ├── v20260420/
+                        │   │       │   └── pr_Amon_ACCESS-ESM1-5_historical_r1i1p1f1_gn_185001-201412.nc
+                        │   │       └── latest -> v20260420/   ← symlink, always points to newest version
+                        │   ├── tas/
+                        │   │   └── gn/
+                        │   │       ├── v20260420/
+                        │   │       └── latest -> v20260420/
+                        │   └── ...
+                        └── Lmon/
+                            ├── gpp/
+                            └── ...
+```
+
+The version directory name (`v20260420`) is derived automatically from the date
+the `write()` step runs. A `latest` symlink is created or updated alongside
+each versioned directory.
+
+Point ILAMB at `drs_root` via `ILAMB_ROOT`:
+
+```bash
+export ILAMB_ROOT=/scratch/tm70/$USER/ilamb_cmorised/CMIP6
+```
 
 ---
 
