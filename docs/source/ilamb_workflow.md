@@ -345,69 +345,107 @@ conn.commit()
 
 ## Output Structure
 
-There are two output modes depending on whether `drs_root` is set in the config.
-
-### Flat output (default — no `drs_root`)
-
-When `drs_root` is omitted, all CMORised files land directly in `output_folder`
-with no sub-directory hierarchy:
+When `drs_root` is **not** set (the default for this workflow), all CMORised
+files land directly in `output_folder` with CMIP6-standard filenames:
 
 ```
 output_folder/
 ├── pr_Amon_ACCESS-ESM1-5_historical_r1i1p1f1_gn_185001-201412.nc
 ├── tas_Amon_ACCESS-ESM1-5_historical_r1i1p1f1_gn_185001-201412.nc
 ├── gpp_Lmon_ACCESS-ESM1-5_historical_r1i1p1f1_gn_185001-201412.nc
+├── ...
 └── cmor_tasks.db
 ```
 
-### CMIP6 DRS output (recommended for ILAMB)
+---
 
-Add a `drs_root` key to the batch config to write files into the full
-CMIP6 Data Reference Syntax directory tree.
-**`drs_root` is independent of `output_folder`** — the tracking database
-stays in `output_folder` while data files go under `drs_root`.
+## Preparing ILAMB-Ready Files
 
-```yaml
-# in batch_config_Feb26_PI_CNP.yml
-output_folder: "/scratch/tm70/$USER/ilamb_cmorised/historical-02"   # database & job scripts
-drs_root:      "/scratch/tm70/$USER/ilamb_cmorised/CMIP6"            # CMORised data
+ILAMB does **not** use CMIP6 DRS directory trees. It expects each variable to
+be a single file named `<variable>.nc` inside a flat directory, which is then
+set as `ILAMB_ROOT`.
+
+The script below creates `output_folder/ILAMB_format/` and populates it with
+symlinks — one per variable — pointing back to the CMORised files. No data is
+copied; the links are relative so the directory can be moved as a unit.
+
+```python
+#!/usr/bin/env python
+"""
+Create ILAMB-ready symlinks from CMORised output.
+
+For each .nc file in output_folder, creates a symlink
+  output_folder/ILAMB_format/<variable>.nc -> ../<cmip_filename>.nc
+
+Usage:
+    python make_ilamb_links.py /path/to/output_folder
+"""
+
+import sys
+from pathlib import Path
+
+
+def make_ilamb_links(output_folder: str) -> None:
+    output_dir = Path(output_folder).resolve()
+    if not output_dir.is_dir():
+        raise SystemExit(f"Error: {output_dir} is not a directory")
+
+    ilamb_dir = output_dir / "ILAMB_format"
+    ilamb_dir.mkdir(exist_ok=True)
+
+    nc_files = sorted(f for f in output_dir.glob("*.nc") if f.is_file())
+    if not nc_files:
+        print(f"No .nc files found in {output_dir}")
+        return
+
+    for nc_file in nc_files:
+        variable = nc_file.name.split("_")[0]   # e.g. "pr" from "pr_Amon_..."
+        link = ilamb_dir / f"{variable}.nc"
+
+        if link.exists() or link.is_symlink():
+            print(f"  skip  {variable}.nc  (already exists)")
+            continue
+
+        rel_target = Path("..") / nc_file.name   # relative — survives moves
+        link.symlink_to(rel_target)
+        print(f"  link  {variable}.nc  ->  {rel_target}")
+
+    print(f"\nDone. ILAMB_format directory: {ilamb_dir}")
+    print(f"Set:  export ILAMB_ROOT={ilamb_dir}")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        raise SystemExit("Usage: python make_ilamb_links.py /path/to/output_folder")
+    make_ilamb_links(sys.argv[1])
 ```
 
-The resulting directory tree follows the CMIP6 template
-`<mip_era>/<activity_id>/<institution_id>/<source_id>/<experiment_id>/<member_id>/<table_id>/<variable_id>/<grid_label>/<version>`:
-
-```
-drs_root/
-└── CMIP6/
-    └── CMIP/
-        └── CSIRO/
-            └── ACCESS-ESM1-5/
-                └── historical/
-                    └── r1i1p1f1/
-                        ├── Amon/
-                        │   ├── pr/
-                        │   │   └── gn/
-                        │   │       ├── v20260420/
-                        │   │       │   └── pr_Amon_ACCESS-ESM1-5_historical_r1i1p1f1_gn_185001-201412.nc
-                        │   │       └── latest -> v20260420/   ← symlink, always points to newest version
-                        │   ├── tas/
-                        │   │   └── gn/
-                        │   │       ├── v20260420/
-                        │   │       └── latest -> v20260420/
-                        │   └── ...
-                        └── Lmon/
-                            ├── gpp/
-                            └── ...
-```
-
-The version directory name (`v20260420`) is derived automatically from the date
-the `write()` step runs. A `latest` symlink is created or updated alongside
-each versioned directory.
-
-Point ILAMB at `drs_root` via `ILAMB_ROOT`:
+**Run after all batch jobs complete:**
 
 ```bash
-export ILAMB_ROOT=/scratch/tm70/$USER/ilamb_cmorised/CMIP6
+python make_ilamb_links.py /scratch/tm70/$USER/ilamb_cmorised/historical-02
+```
+
+The resulting layout:
+
+```
+output_folder/
+├── pr_Amon_ACCESS-ESM1-5_historical_r1i1p1f1_gn_185001-201412.nc
+├── tas_Amon_ACCESS-ESM1-5_historical_r1i1p1f1_gn_185001-201412.nc
+├── gpp_Lmon_ACCESS-ESM1-5_historical_r1i1p1f1_gn_185001-201412.nc
+├── ...
+├── cmor_tasks.db
+└── ILAMB_format/
+    ├── pr.nc     -> ../pr_Amon_ACCESS-ESM1-5_historical_r1i1p1f1_gn_185001-201412.nc
+    ├── tas.nc    -> ../tas_Amon_ACCESS-ESM1-5_historical_r1i1p1f1_gn_185001-201412.nc
+    ├── gpp.nc    -> ../gpp_Lmon_ACCESS-ESM1-5_historical_r1i1p1f1_gn_185001-201412.nc
+    └── ...
+```
+
+Point ILAMB at the `ILAMB_format` subdirectory:
+
+```bash
+export ILAMB_ROOT=/scratch/tm70/$USER/ilamb_cmorised/historical-02/ILAMB_format
 ```
 
 ---
