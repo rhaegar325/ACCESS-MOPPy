@@ -216,10 +216,111 @@ then open ``http://localhost:8501`` in your local browser.
    different node, so always specify the exact login node name in the tunnel.
 
 **Alternative: NCI ARE (Australian Research Environment)**
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-If you use `ARE <https://are.nci.org.au>`_ (NCI's web portal), you can open a
-*Virtual Desktop* or *JupyterLab* session and launch a browser inside that session —
-no SSH tunnel needed.
+`ARE <https://are.nci.org.au>`_ is NCI's web portal that runs interactive sessions
+directly on Gadi, so the dashboard is always on ``localhost`` from the session's
+perspective — no SSH tunnel needed.
+
+Two session types work for this purpose:
+
+.. contents::
+   :local:
+   :depth: 1
+
+**Option A: Virtual Desktop (recommended)**
+
+A Virtual Desktop gives you a full Linux GUI inside the browser, including a web browser
+that runs on Gadi itself.
+
+1. Go to https://are.nci.org.au and log in with your NCI credentials.
+2. Click **Virtual Desktop** → **New Session**.
+3. Fill in the launch form:
+
+   .. list-table::
+      :header-rows: 1
+      :widths: 25 75
+
+      * - Field
+        - Suggested value
+      * - *Queue*
+        - ``normal`` (or ``expressbw`` for short interactive work)
+      * - *Walltime (hours)*
+        - however long you expect jobs to run, e.g. ``4``
+      * - *CPUs / node*
+        - ``2`` (the dashboard itself is lightweight)
+      * - *Memory (GB)*
+        - ``8``
+      * - *Project*
+        - your NCI project code, e.g. ``tm70``
+      * - *Storage*
+        - all storage paths your config needs, e.g. ``gdata/tm70+scratch/tm70``
+
+4. Click **Launch**, then wait for the session to become *Running* and click **Open Virtual Desktop**.
+5. Inside the desktop, open a **terminal** (right-click → Open Terminal, or use the taskbar).
+6. Activate your Python environment and run:
+
+   .. code-block:: bash
+
+      conda activate moppy_env
+      moppy-cmorise batch_config.yml
+
+7. Open the **Firefox** browser inside the desktop and navigate to:
+
+   .. code-block:: text
+
+      http://localhost:8501
+
+   The dashboard loads immediately — everything stays within Gadi's network.
+
+.. note::
+
+   The Virtual Desktop session runs on a **compute node**, not a login node.
+   This means ``qsub`` will submit jobs from a compute node, which is permitted
+   on Gadi but counts against your project's compute allocation for the session
+   itself. Keep walltime reasonable.
+
+**Option B: JupyterLab with a server-proxy URL**
+
+JupyterLab sessions on ARE can proxy arbitrary local ports through the JupyterLab
+URL, provided ``jupyter-server-proxy`` is installed in your environment.
+
+1. Go to https://are.nci.org.au → **JupyterLab** → **New Session**.
+2. Configure resources as above and launch the session.
+3. Once JupyterLab opens, start a **Terminal** (File → New → Terminal).
+4. Activate your environment and run ``moppy-cmorise batch_config.yml``.
+5. Access the dashboard via the server-proxy URL (replace ``<job-id>`` with the
+   ARE session identifier shown in your browser's address bar):
+
+   .. code-block:: text
+
+      https://are.nci.org.au/proxy/8501/
+
+   If the above path does not work, use the full proxy path that JupyterLab
+   uses for your session:
+
+   .. code-block:: text
+
+      <JupyterLab base URL>/proxy/8501/
+
+   For example, if your JupyterLab URL is
+   ``https://are.nci.org.au/user/abc123/lab``, try:
+
+   .. code-block:: text
+
+      https://are.nci.org.au/user/abc123/proxy/8501/
+
+.. note::
+
+   The server-proxy approach requires ``jupyter-server-proxy`` to be installed
+   in the active environment:
+
+   .. code-block:: bash
+
+      pip install jupyter-server-proxy
+
+   If it is not available, use the Virtual Desktop option instead (Option A),
+   or fall back to the SSH tunnel described above.
 
 Monitoring and Debugging
 ------------------------
