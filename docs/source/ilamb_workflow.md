@@ -365,65 +365,18 @@ ILAMB does **not** use CMIP6 DRS directory trees. It expects each variable to
 be a single file named `<variable>.nc` inside a flat directory, which is then
 set as `ILAMB_ROOT`.
 
-The script below creates `output_folder/ILAMB_format/` and populates it with
-symlinks — one per variable — pointing back to the CMORised files. No data is
-copied; the links are relative so the directory can be moved as a unit.
-
-```python
-#!/usr/bin/env python
-"""
-Create ILAMB-ready symlinks from CMORised output.
-
-For each .nc file in output_folder, creates a symlink
-  output_folder/ILAMB_format/<variable>.nc -> ../<cmip_filename>.nc
-
-Usage:
-    python make_ilamb_links.py /path/to/output_folder
-"""
-
-import sys
-from pathlib import Path
-
-
-def make_ilamb_links(output_folder: str) -> None:
-    output_dir = Path(output_folder).resolve()
-    if not output_dir.is_dir():
-        raise SystemExit(f"Error: {output_dir} is not a directory")
-
-    ilamb_dir = output_dir / "ILAMB_format"
-    ilamb_dir.mkdir(exist_ok=True)
-
-    nc_files = sorted(f for f in output_dir.glob("*.nc") if f.is_file())
-    if not nc_files:
-        print(f"No .nc files found in {output_dir}")
-        return
-
-    for nc_file in nc_files:
-        variable = nc_file.name.split("_")[0]   # e.g. "pr" from "pr_Amon_..."
-        link = ilamb_dir / f"{variable}.nc"
-
-        if link.exists() or link.is_symlink():
-            print(f"  skip  {variable}.nc  (already exists)")
-            continue
-
-        rel_target = Path("..") / nc_file.name   # relative — survives moves
-        link.symlink_to(rel_target)
-        print(f"  link  {variable}.nc  ->  {rel_target}")
-
-    print(f"\nDone. ILAMB_format directory: {ilamb_dir}")
-    print(f"Set:  export ILAMB_ROOT={ilamb_dir}")
-
-
-if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        raise SystemExit("Usage: python make_ilamb_links.py /path/to/output_folder")
-    make_ilamb_links(sys.argv[1])
-```
-
-**Run after all batch jobs complete:**
+Run the following command after all batch jobs complete. Set `OUTPUT_FOLDER`
+to your actual output path, then copy-paste the block as-is:
 
 ```bash
-python make_ilamb_links.py /scratch/tm70/$USER/ilamb_cmorised/historical-02
+OUTPUT_FOLDER="/scratch/tm70/$USER/ilamb_cmorised/historical-02"
+
+mkdir -p "${OUTPUT_FOLDER}/ILAMB_format"
+for f in "${OUTPUT_FOLDER}"/*.nc; do
+    fname="${f##*/}"
+    var="${fname%%_*}"
+    ln -sf "../${fname}" "${OUTPUT_FOLDER}/ILAMB_format/${var}.nc" && echo "  ${var}.nc"
+done
 ```
 
 The resulting layout:
