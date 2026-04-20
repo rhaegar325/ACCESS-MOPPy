@@ -48,40 +48,40 @@ with `*` require **daily** input files; all others use monthly input.
 
 ### Emon — Monthly ecosystem diagnostics
 
-| Variable | Long name | Units |
-|----------|-----------|-------|
-| `cSoil` | Carbon mass in soil pool | kg m⁻² |
-| `fBNF` | Biological nitrogen fixation | kg m⁻² s⁻¹ |
+| Variable | Long name |
+|----------|-----------|
+| `cSoil` | Carbon mass in soil pool |
+| `fBNF` | Biological nitrogen fixation |
 
 ### Lmon — Monthly land surface
 
-| Variable | Long name | Units |
-|----------|-----------|-------|
-| `cVeg` | Carbon mass in vegetation | kg m⁻² |
-| `gpp` | Gross primary production | kg m⁻² s⁻¹ |
-| `lai` | Leaf area index | 1 |
-| `nbp` | Net biome production | kg m⁻² s⁻¹ |
-| `ra` | Plant respiration | kg m⁻² s⁻¹ |
-| `rh` | Heterotrophic respiration | kg m⁻² s⁻¹ |
-| `tsl` | Temperature of soil layers | K |
-| `mrro` | Total runoff | kg m⁻² s⁻¹ |
+| Variable | Long name |
+|----------|-----------|
+| `cVeg` | Carbon mass in vegetation |
+| `gpp` | Gross primary production |
+| `lai` | Leaf area index |
+| `nbp` | Net biome production |
+| `ra` | Plant respiration |
+| `rh` | Heterotrophic respiration |
+| `tsl` | Temperature of soil layers |
+| `mrro` | Total runoff |
 
 ### Amon — Monthly atmosphere / surface energy balance
 
-| Variable | Long name | Units |
-|----------|-----------|-------|
-| `evspsbl` | Evaporation | kg m⁻² s⁻¹ |
-| `hfls` | Surface upward latent heat flux | W m⁻² |
-| `hfss` | Surface upward sensible heat flux | W m⁻² |
-| `hurs` | Near-surface relative humidity | % |
-| `pr` | Precipitation | kg m⁻² s⁻¹ |
-| `rlds` | Surface downwelling longwave radiation | W m⁻² |
-| `rlus` | Surface upwelling longwave radiation | W m⁻² |
-| `rsds` | Surface downwelling shortwave radiation | W m⁻² |
-| `rsus` | Surface upwelling shortwave radiation | W m⁻² |
-| `tas` | Near-surface air temperature | K |
-| `tasmax` * | Daily maximum near-surface air temperature | K |
-| `tasmin` * | Daily minimum near-surface air temperature | K |
+| Variable | Long name |
+|----------|-----------|
+| `evspsbl` | Evaporation |
+| `hfls` | Surface upward latent heat flux |
+| `hfss` | Surface upward sensible heat flux |
+| `hurs` | Near-surface relative humidity |
+| `pr` | Precipitation |
+| `rlds` | Surface downwelling longwave radiation |
+| `rlus` | Surface upwelling longwave radiation |
+| `rsds` | Surface downwelling shortwave radiation |
+| `rsus` | Surface upwelling shortwave radiation |
+| `tas` | Near-surface air temperature |
+| `tasmax` * | Daily maximum near-surface air temperature |
+| `tasmin` * | Daily minimum near-surface air temperature |
 
 > `tasmax` and `tasmin` are Amon-table variables but are derived from **daily**
 > ACCESS output (`*dai.nc`). Their file patterns differ from the other Amon variables.
