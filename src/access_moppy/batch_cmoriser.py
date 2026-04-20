@@ -298,6 +298,12 @@ def main():
 
         print(f"\nMonitor jobs with: qstat {' '.join(job_ids)}")
         print("Dashboard available at: http://localhost:8501")
+        print(
+            "\nTo view the dashboard from your local machine (e.g. on NCI Gadi),\n"
+            "set up an SSH tunnel in a new terminal:\n"
+            f"  ssh -L 8501:localhost:8501 <username>@$(hostname)\n"
+            "Then open http://localhost:8501 in your local browser."
+        )
 
         # Optionally wait for all jobs to complete
         if config_data.get("wait_for_completion", False):

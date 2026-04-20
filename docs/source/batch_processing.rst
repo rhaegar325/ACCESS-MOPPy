@@ -179,6 +179,43 @@ Performance Optimization
 2. **Group related variables** (future feature):
    Process compatible variables together to reduce job count.
 
+Accessing the Dashboard on NCI Gadi
+-------------------------------------
+
+The Streamlit dashboard starts on the **login node** where ``moppy-cmorise`` is run (port 8501).
+Because Gadi's login nodes are not directly reachable from a browser, you need an **SSH tunnel**
+to forward that port to your local machine.
+
+**Step 1 – find your login node**
+
+.. code-block:: bash
+
+   # Run this on Gadi after starting moppy-cmorise
+   hostname
+   # e.g. gadi-login-07.gadi.nci.org.au
+
+**Step 2 – open a tunnel from your local machine**
+
+.. code-block:: bash
+
+   # Replace <username> and the hostname from Step 1
+   ssh -L 8501:localhost:8501 <username>@gadi-login-07.gadi.nci.org.au
+
+Keep this terminal open. Then open ``http://localhost:8501`` in your browser.
+
+.. note::
+
+   Gadi has multiple login nodes (``gadi-login-01`` … ``gadi-login-12``).
+   The dashboard runs only on the node where the ``moppy-cmorise`` command was executed,
+   so make sure the tunnel targets that specific node, not the generic ``gadi.nci.org.au``
+   load-balancer address.
+
+**Alternative: NCI ARE (Australian Research Environment)**
+
+If you use `ARE <https://are.nci.org.au>`_ (NCI's web portal), you can open a
+*Virtual Desktop* or *JupyterLab* session and launch a browser inside that session —
+no SSH tunnel needed.
+
 Monitoring and Debugging
 ------------------------
 
