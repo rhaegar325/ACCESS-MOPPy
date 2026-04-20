@@ -300,8 +300,8 @@ def main():
         print("Dashboard available at: http://localhost:8501")
         print(
             "\nTo view the dashboard from your local machine (e.g. on NCI Gadi),\n"
-            "set up an SSH tunnel in a new terminal:\n"
-            f"  ssh -L 8501:localhost:8501 <username>@$(hostname)\n"
+            "run this in a new local terminal (replace <username>):\n"
+            f"  ssh -NL 8501:$(hostname -s):8501 <username>@gadi.nci.org.au\n"
             "Then open http://localhost:8501 in your local browser."
         )
 

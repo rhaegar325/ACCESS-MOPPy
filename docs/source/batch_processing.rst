@@ -186,29 +186,34 @@ The Streamlit dashboard starts on the **login node** where ``moppy-cmorise`` is 
 Because Gadi's login nodes are not directly reachable from a browser, you need an **SSH tunnel**
 to forward that port to your local machine.
 
-**Step 1 – find your login node**
+**Step 1 – find your login node (run on Gadi)**
 
 .. code-block:: bash
 
-   # Run this on Gadi after starting moppy-cmorise
-   hostname
-   # e.g. gadi-login-07.gadi.nci.org.au
+   hostname -s
+   # e.g. gadi-login-07
 
 **Step 2 – open a tunnel from your local machine**
 
+The individual login nodes are only reachable through the ``gadi.nci.org.au`` gateway.
+Use the gateway as a jump host and forward the port to the specific login node:
+
 .. code-block:: bash
 
-   # Replace <username> and the hostname from Step 1
-   ssh -L 8501:localhost:8501 <username>@gadi-login-07.gadi.nci.org.au
+   # Replace <username> and <login-node> with your values from Step 1
+   ssh -NL 8501:<login-node>:8501 <username>@gadi.nci.org.au
+   # e.g.
+   ssh -NL 8501:gadi-login-07:8501 abc123@gadi.nci.org.au
 
-Keep this terminal open. Then open ``http://localhost:8501`` in your browser.
+``-N`` keeps the tunnel open without starting a shell. Keep this terminal open,
+then open ``http://localhost:8501`` in your local browser.
 
 .. note::
 
    Gadi has multiple login nodes (``gadi-login-01`` … ``gadi-login-12``).
-   The dashboard runs only on the node where the ``moppy-cmorise`` command was executed,
-   so make sure the tunnel targets that specific node, not the generic ``gadi.nci.org.au``
-   load-balancer address.
+   The dashboard runs only on the node where ``moppy-cmorise`` was executed.
+   Using the generic ``gadi.nci.org.au`` address alone may route you to a
+   different node, so always specify the exact login node name in the tunnel.
 
 **Alternative: NCI ARE (Australian Research Environment)**
 
