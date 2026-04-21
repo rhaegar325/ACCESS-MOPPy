@@ -1,4 +1,6 @@
 import warnings
+from contextlib import ExitStack
+from importlib.resources import as_file, files
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
@@ -75,6 +77,7 @@ class ACCESS_ESM_CMORiser:
             )
 
         self.cmip_version = cmip_version
+        self._resource_stack = ExitStack()
 
         # Handle backward compatibility and validation
         if input_paths is not None and input_data is None:
@@ -112,17 +115,33 @@ class ACCESS_ESM_CMORiser:
 
         # Check if this is an internal calculation that doesn't need input data
         is_internal_calc = False
+        ressource_file = None
         if cmor_name in self.variable_mapping:
             calc = self.variable_mapping[cmor_name].get("calculation", {})
             is_internal_calc = calc.get("type") == "internal"
+            ressource_file = self.variable_mapping[cmor_name].get("ressource_file")
 
         if input_paths is None and input_data is None:
-            if not is_internal_calc:
+            if is_internal_calc:
+                print(f"✓ No input data required for internal calculation: {cmor_name}")
+            elif ressource_file is not None:
+                resource_path = (
+                    files("access_moppy")
+                    .joinpath("ressources")
+                    .joinpath(ressource_file)
+                )
+                resolved_path = self._resource_stack.enter_context(
+                    as_file(resource_path)
+                )
+                input_data = str(resolved_path)
+                print(
+                    f"✓ No input data provided — using bundled ressource file for "
+                    f"{cmor_name}: {ressource_file}"
+                )
+            else:
                 raise ValueError(
                     "Must specify either 'input_data' or 'input_paths' for non-internal calculations."
                 )
-            else:
-                print(f"✓ No input data required for internal calculation: {cmor_name}")
 
         # Determine input type and store appropriately
         self.input_is_xarray = isinstance(input_data, (xr.Dataset, xr.DataArray))
@@ -387,3 +406,16 @@ class ACCESS_ESM_CMORiser:
         Writes the CMORised dataset to the specified output path.
         """
         self.cmoriser.write()
+
+    def close(self):
+        """Release any held resource-file contexts."""
+        self._resource_stack.close()
+
+    def __enter__(self):
+        """Return self for context-manager usage."""
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        """Ensure resource contexts are cleaned up on context exit."""
+        self.close()
+        return False

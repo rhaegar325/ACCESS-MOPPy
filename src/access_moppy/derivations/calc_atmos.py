@@ -34,6 +34,7 @@
 
 # import click
 # import dask
+
 import numpy as np
 import xarray as xr
 
@@ -178,6 +179,35 @@ R_e = 6.378e06
 # ----------------------------------------------------------------------
 
 
+def level_to_height(ds):
+    """
+    Transform model level indices to height coordinates.
+
+    Converts from level dimension to height dimension by using stored height values
+    and updating dimension coordinates accordingly.
+
+    Parameters
+    ----------
+    ds : xarray.Dataset
+        Dataset with model level coordinates
+
+    Returns
+    -------
+    xarray.Dataset
+        Dataset with height coordinate dimension
+    """
+    # Handle level coordinate transformation
+    if "theta_level_height" in ds:
+        ds = (
+            ds.assign_coords({"lev": ds["theta_level_height"]})
+            .swap_dims({"model_theta_level_number": "lev"})
+            .drop_vars(
+                ["theta_level_height", "model_theta_level_number"], errors="ignore"
+            )
+        )
+    return ds
+
+
 def cli_level_to_height(ds):
     # Handle level coordinate transformation
     if "theta_level_height" in ds:
@@ -306,3 +336,20 @@ def calculate_areacella(nlat=145, nlon=192, earth_radius=6371000.0):
 
     # Return as Dataset for use in internal calculations
     return xr.Dataset({"areacella": areacella_2d})
+
+
+def zfull_level_to_height(ds):
+    if "theta_level_height" in ds:
+        theta_level_height = ds["theta_level_height"]
+        if "time" in theta_level_height.dims:
+            theta_level_height = theta_level_height.isel(time=0, drop=True)
+        ds = (
+            ds.assign_coords({"lev": theta_level_height})
+            .swap_dims({"model_theta_level_number": "lev"})
+            .drop_vars(
+                ["theta_level_height", "model_theta_level_number"], errors="ignore"
+            )
+        )
+    if "time" in ds.dims:
+        ds = ds.isel(time=0, drop=True)
+    return ds

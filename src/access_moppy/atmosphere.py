@@ -67,7 +67,7 @@ class Atmosphere_CMORiser(CMORiser):
                     continue
             # Ensure the coordinate's bounds attribute always points to the bounds variable,
             # regardless of whether it was just calculated or already existed in the input data.
-            if coord_name in self.ds.coords:
+            if coord_name in self.ds.coords or coord_name in self.ds.data_vars:
                 self.ds[coord_name].attrs["bounds"] = bnds_var
 
     def remove_spurious_time_dimensions(self, required_vars):
@@ -152,7 +152,7 @@ class Atmosphere_CMORiser(CMORiser):
         )
 
         required = set(
-            required_vars
+            list(required_vars)
             + list(axes_rename_map.keys())
             + list(bounds_rename_map.keys())
         )
@@ -366,6 +366,7 @@ class Atmosphere_CMORiser(CMORiser):
                 else:
                     updated = self.ds[name].astype(dtype)
                 updated.attrs.update(coord_attrs)
+                updated.attrs.pop("_FillValue", None)
                 self.ds[name] = updated
             elif "value" in meta:
                 val = meta["value"]
@@ -413,3 +414,27 @@ class Atmosphere_CMORiser(CMORiser):
                         },
                     )
                 self.ds = self.ds.assign_coords({name: arr})
+
+        # CF §7.1 — bounds variables must share attrs with their parent coordinate.
+        # They should NOT carry _FillValue, coordinates, or a bounds pointer.
+        # After renaming (e.g. sigma_theta_bnds → b_bnds) the inherited source attrs
+        # are stale; replace them with attrs derived from the (now-updated) parent.
+        INHERIT_KEYS = (
+            "standard_name",
+            "long_name",
+            "units",
+            "axis",
+            "positive",
+            "calendar",
+        )
+        all_ds_vars = list(self.ds.data_vars) + list(self.ds.coords)
+        for var in all_ds_vars:
+            if not var.endswith("_bnds"):
+                continue
+            parent = var[: -len("_bnds")]
+            parent_attrs = {}
+            if parent in self.ds:
+                parent_attrs = {
+                    k: v for k, v in self.ds[parent].attrs.items() if k in INHERIT_KEYS
+                }
+            self.ds[var].attrs = parent_attrs
