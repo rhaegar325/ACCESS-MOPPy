@@ -1,0 +1,233 @@
+# Batch CMORisation configuration — Atmosphere, Land, Land Ice, Sea Ice, and Fixed variables
+# Run with: python -m access_moppy.batch_cmoriser batch_config_atm_land_seaice_fx.yml
+
+# Variables to process (one PBS job per variable)
+variables:
+  # --- Amon ---
+  - Amon.cl
+  - Amon.cli
+  - Amon.clivi
+  - Amon.clt
+  - Amon.clw
+  - Amon.clwvi
+  - Amon.evspsbl
+  - Amon.hfls
+  - Amon.hfss
+  - Amon.hur
+  - Amon.hurs
+  - Amon.hus
+  - Amon.huss
+  - Amon.pr
+  - Amon.prc
+  - Amon.prsn
+  - Amon.prw
+  - Amon.ps
+  - Amon.psl
+  - Amon.rlds
+  - Amon.rldscs
+  - Amon.rlus
+  - Amon.rluscs
+  - Amon.rlut
+  - Amon.rlutcs
+  - Amon.rsds
+  - Amon.rsdscs
+  - Amon.rsdt
+  - Amon.rsus
+  - Amon.rsuscs
+  - Amon.rsut
+  - Amon.rsutcs
+  - Amon.sfcWind
+  - Amon.ta
+  - Amon.tas
+  - Amon.tasmax
+  - Amon.tasmin
+  - Amon.tauu
+  - Amon.tauv
+  - Amon.ts
+  - Amon.ua
+  - Amon.uas
+  - Amon.va
+  - Amon.vas
+  - Amon.wap
+  - Amon.zg
+  # --- LImon ---
+  - LImon.snc
+  - LImon.snw
+  # --- Lmon ---
+  - Lmon.evspsblsoi
+  - Lmon.evspsblveg
+  - Lmon.lai
+  - Lmon.mrfso
+  - Lmon.mrro
+  - Lmon.mrros
+  - Lmon.mrso
+  - Lmon.mrsos
+  # --- fx ---
+  - fx.areacella
+  - fx.mrsofc
+  - fx.orog
+  - fx.rootd
+  - fx.sftgif
+  - fx.sftlf
+  # --- SIday ---
+  - SIday.siconc
+  # --- SImon ---
+  - SImon.siconc
+  - SImon.simass
+  - SImon.sisnthick
+  - SImon.sitemptop
+  - SImon.sithick
+  - SImon.sitimefrac
+  - SImon.siu
+  - SImon.siv
+
+# CMIP6 metadata
+experiment_id: historical
+source_id: ACCESS-ESM1-5
+variant_label: r1i1p1f1
+grid_label: gn
+activity_id: CMIP
+
+# Input and output paths
+input_folder: "/g/data/p73/archive/CMIP7/ACCESS-ESM1-6/production/historical-02"
+output_folder: "YOUR_OUTPUT_PATH"
+
+# File patterns (relative to input_folder)
+file_patterns:
+  # --- Amon (atmosphere monthly) ---
+  Amon.cl:          "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.cli:         "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.clivi:       "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.clt:         "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.clw:         "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.clwvi:       "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.evspsbl:     "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.hfls:        "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.hfss:        "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.hur:         "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.hurs:        "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.hus:         "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.huss:        "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.pr:          "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.prc:         "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.prsn:        "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.prw:         "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.ps:          "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.psl:         "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.rlds:        "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.rldscs:      "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.rlus:        "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.rluscs:      "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.rlut:        "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.rlutcs:      "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.rsds:        "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.rsdscs:      "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.rsdt:        "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.rsus:        "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.rsuscs:      "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.rsut:        "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.rsutcs:      "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.sfcWind:     "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.ta:          "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.tas:         "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.tasmax:      "/output*/atmosphere/netCDF/*dai.nc"
+  Amon.tasmin:      "/output*/atmosphere/netCDF/*dai.nc"
+  Amon.tauu:        "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.tauv:        "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.ts:          "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.ua:          "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.uas:         "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.va:          "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.vas:         "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.wap:         "/output*/atmosphere/netCDF/*mon.nc"
+  Amon.zg:          "/output*/atmosphere/netCDF/*mon.nc"
+  # --- LImon (land ice monthly — part of atm/land component in ACCESS) ---
+  LImon.snc:        "/output*/atmosphere/netCDF/*mon.nc"
+  LImon.snw:        "/output*/atmosphere/netCDF/*mon.nc"
+  # --- Lmon (land monthly) ---
+  Lmon.evspsblsoi:  "/output*/atmosphere/netCDF/*mon.nc"
+  Lmon.evspsblveg:  "/output*/atmosphere/netCDF/*mon.nc"
+  Lmon.lai:         "/output*/atmosphere/netCDF/*mon.nc"
+  Lmon.mrfso:       "/output*/atmosphere/netCDF/*mon.nc"
+  Lmon.mrro:        "/output*/atmosphere/netCDF/*mon.nc"
+  Lmon.mrros:       "/output*/atmosphere/netCDF/*mon.nc"
+  Lmon.mrso:        "/output*/atmosphere/netCDF/*mon.nc"
+  Lmon.mrsos:       "/output*/atmosphere/netCDF/*mon.nc"
+  # --- fx (fixed/time-invariant fields) ---
+  fx.areacella:     "/output*/atmosphere/netCDF/*fx.nc"
+  fx.mrsofc:        "/output*/atmosphere/netCDF/*fx.nc"
+  fx.orog:          "/output*/atmosphere/netCDF/*fx.nc"
+  fx.rootd:         "/output*/atmosphere/netCDF/*fx.nc"
+  fx.sftgif:        "/output*/atmosphere/netCDF/*fx.nc"
+  fx.sftlf:         "/output*/atmosphere/netCDF/*fx.nc"
+  # --- SIday (sea ice daily) ---
+  SIday.siconc:     "/output*/ocean/netCDF/*dai.nc"
+  # --- SImon (sea ice monthly) ---
+  SImon.siconc:     "/output*/ocean/netCDF/*mon.nc"
+  SImon.simass:     "/output*/ocean/netCDF/*mon.nc"
+  SImon.sisnthick:  "/output*/ocean/netCDF/*mon.nc"
+  SImon.sitemptop:  "/output*/ocean/netCDF/*mon.nc"
+  SImon.sithick:    "/output*/ocean/netCDF/*mon.nc"
+  SImon.sitimefrac: "/output*/ocean/netCDF/*mon.nc"
+  SImon.siu:        "/output*/ocean/netCDF/*mon.nc"
+  SImon.siv:        "/output*/ocean/netCDF/*mon.nc"
+
+# PBS job configuration (defaults for all variables)
+queue: "normal"
+cpus_per_node: 12
+mem: "190GB"
+jobfs: 100GB
+walltime: "02:00:00"
+scheduler_options: "#PBS -P iq82"
+storage: "gdata/tm70+gdata/xp65+gdata/p73+scratch/tm70"
+
+# Variable-specific resource overrides
+variable_resources:
+  # 3D pressure-level variables need more resources
+  Amon.cl:
+    cpus_per_node: 24
+    mem: "190GB"
+    walltime: "04:00:00"
+  Amon.cli:
+    cpus_per_node: 24
+    mem: "190GB"
+    walltime: "04:00:00"
+  Amon.clw:
+    cpus_per_node: 24
+    mem: "190GB"
+    walltime: "04:00:00"
+  Amon.hur:
+    cpus_per_node: 24
+    mem: "190GB"
+    walltime: "04:00:00"
+  Amon.hus:
+    cpus_per_node: 24
+    mem: "190GB"
+    walltime: "04:00:00"
+  Amon.ta:
+    cpus_per_node: 24
+    mem: "190GB"
+    walltime: "04:00:00"
+  Amon.ua:
+    cpus_per_node: 24
+    mem: "190GB"
+    walltime: "04:00:00"
+  Amon.va:
+    cpus_per_node: 24
+    mem: "190GB"
+    walltime: "04:00:00"
+  Amon.wap:
+    cpus_per_node: 24
+    mem: "190GB"
+    walltime: "04:00:00"
+  Amon.zg:
+    cpus_per_node: 24
+    mem: "190GB"
+    walltime: "04:00:00"
+
+# Environment setup
+worker_init: |
+  module use /g/data/xp65/public/modules
+  module load conda/analysis3-26.04
+
+wait_for_completion: false
