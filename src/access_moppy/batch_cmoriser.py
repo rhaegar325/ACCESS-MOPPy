@@ -259,6 +259,10 @@ def main():
         f"Database initialized with {len(config_data['variables'])} tasks at: {db_path}"
     )
 
+    # Close the main-process connection before workers start so it does not
+    # hold an open WAL writer while N parallel PBS jobs connect simultaneously.
+    tracker.close()
+
     # Start Streamlit dashboard (optional - won't block if streamlit is not installed)
     try:
         DASHBOARD_SCRIPT = files("access_moppy.dashboard").joinpath("cmor_dashboard.py")
