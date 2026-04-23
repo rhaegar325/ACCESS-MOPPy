@@ -1214,13 +1214,13 @@ class CMORiser:
                         max_len = len(str_val)
                         values = str_val.encode("utf-8")
                     else:
-                        # Handle array of strings
-                        if coord.dtype.kind == "O":
-                            str_values = np.array([str(s) for s in coord.values.flat])
-                        else:
-                            str_values = coord.values.astype(str).flat
+                        # Handle array of strings — materialise as a list so the
+                        # iterator is not exhausted by max() before encode step
+                        str_values = [str(s) for s in coord.values.flat]
 
-                        max_len = max(len(s) for s in str_values)
+                        # NetCDF fixed-width byte strings must have a width of at
+                        # least 1, including when all values are empty strings.
+                        max_len = max(1, max((len(s) for s in str_values), default=0))
                         values = np.array(
                             [s.encode("utf-8") for s in str_values], dtype=f"S{max_len}"
                         )
