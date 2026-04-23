@@ -247,6 +247,16 @@ class Atmosphere_CMORiser(CMORiser):
 
         self.ds = self.ds.rename(rename_map)
 
+        # Drop stale units from coordinates that were actually renamed to a
+        # different name.  The old units belong to the old axis and are no
+        # longer meaningful; update_attributes will assign the authoritative
+        # CMIP units from the vocabulary.  Identity entries (old == new, e.g.
+        # time → time) are skipped so metadata such as "days since …" is
+        # preserved for the special-case handling in update_attributes.
+        for old_name, new_name in rename_map.items():
+            if old_name != new_name and new_name in self.ds.coords:
+                self.ds[new_name].attrs.pop("units", None)
+
         # Calculate missing bounds variables after renaming so that
         # coordinate names in self.ds match the output names in required_bounds
         self.calculate_missing_bounds_variables(required_bounds)
