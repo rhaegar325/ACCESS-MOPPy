@@ -1109,9 +1109,9 @@
             "CF standard Name": "geopotential_height",
             "dimensions": {
                 "time": "time",
-                "pressure": "plev",
-                "lat_v": "lat",
-                "lon_u": "lon"
+                "model_theta_level_number": "plev",
+                "lat": "lat",
+                "lon": "lon"
             },
             "units": "m",
             "positive": null,
