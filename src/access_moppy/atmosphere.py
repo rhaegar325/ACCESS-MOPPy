@@ -332,7 +332,12 @@ class Atmosphere_CMORiser(CMORiser):
             name = meta["out_name"]
             dtype = self.type_mapping.get(meta.get("type", "double"), np.float64)
             if name in self.ds:
-                self._check_units(name, meta.get("units", ""))
+                expected_units = meta.get("units", "")
+                # UM writes coordinate units as "1" for pressure-level axes; the
+                # CMIP vocabulary is authoritative here, so patch before checking.
+                if self.ds[name].attrs.get("units") == "1" and expected_units and expected_units != "1":
+                    self.ds[name].attrs["units"] = expected_units
+                self._check_units(name, expected_units)
                 if meta.get("standard_name") == "time":
                     self._check_calendar(name)
                 original_units = self.ds[name].attrs.get("units", "")
