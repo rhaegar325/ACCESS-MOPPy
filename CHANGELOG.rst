@@ -4,6 +4,22 @@ Changelog
 This CHANGELOG documents only key changes between versions. For a full description
 of all changes see https://github.com/ACCESS-NRI/ACCESS-MOPPy/releases
 
+moppy-v1.1.0b (2026-04-24)
+---------------------------
+
+**Bug Fixes & Extended Variable Support**
+
+* Numerous bug fixes across atmosphere, ocean, sea-ice, and land components
+* Extended variable support: ``tran``, ``hfgeou``, ``msftbarot``, ``sftof``, ``zfull``,
+  ``landCoverFrac``, ``tsl``, ``gpp``, ``cl``, ``siconc``, ``hfds``, ``zg``, ``so``,
+  ``sos``, ``tasmax``, ``tasmin``, and more
+* Add support for CMIP6, CMIP6Plus, and CMIP7 controlled vocabularies simultaneously
+* ILAMB workflow: batch processing and softlink generator for evaluation of historical
+  runs (see documentation and ``Tutorial_CMORise_ILAMB_Variables.ipynb``)
+* Re-enable Python 3.13 support
+* Improved unit test coverage for derivation modules
+* Documentation improvements
+
 moppy-v1.0.0 (2025-10-27)
 --------------------------
 
