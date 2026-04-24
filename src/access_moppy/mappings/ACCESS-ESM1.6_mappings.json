@@ -2717,7 +2717,7 @@
         "mrsos": {
             "dimensions": {
                 "time": "time",
-                "depth": "depth",
+                "soil_model_level_number": "depth",
                 "lat": "lat",
                 "lon": "lon"
             },
