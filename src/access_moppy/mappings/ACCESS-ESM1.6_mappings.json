@@ -1110,18 +1110,18 @@
             "CF standard Name": "geopotential_height",
             "dimensions": {
                 "time": "time",
-                "model_theta_level_number": "plev",
-                "lat": "lat",
-                "lon": "lon"
+                "pressure": "plev",
+                "lat_v": "lat",
+                "lon_u": "lon"
             },
             "units": "m",
             "positive": null,
             "model_variables": [
-                "fld_s16i201"
+                "fld_s30i297"
             ],
             "calculation": {
                 "type": "direct",
-                "formula": "fld_s16i201"
+                "formula": "fld_s30i297"
             }
         },
         "co23D": {
