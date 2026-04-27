@@ -7,6 +7,7 @@
             "land",
             "landIce",
             "ocean",
+            "oceanBgchem",
             "sea_ice"
         ],
         "description": "Variable mappings for ACCESS-ESM1.6 Earth System Model"
@@ -77,7 +78,9 @@
                     2
                 ]
             }
-        },
+        }
+    },
+    "atmosphere": {
         "zg500": {
             "CF standard Name": "geopotential_height",
             "dimensions": {
@@ -100,9 +103,7 @@
                     "pressure": 500
                 }
             }
-        }
-    },
-    "atmosphere": {
+        },
         "rldscs": {
             "CF standard Name": "surface_downwelling_longwave_flux_in_air_assuming_clear_sky",
             "dimensions": {
@@ -678,7 +679,7 @@
                 "lon": "lon"
             },
             "units": "W m-2",
-            "positive": "down",
+            "positive": "up",
             "model_variables": [
                 "fld_s02i206"
             ],
@@ -1208,142 +1209,6 @@
             },
             "CF standard Name": ""
         },
-        "msftmrho": {
-            "dimensions": {
-                "time": "time",
-                "potrho": "potrho",
-                "yu_ocean": "latitude"
-            },
-            "units": "kg s-1",
-            "positive": null,
-            "model_variables": [
-                "ty_trans_rho",
-                "ty_trans_rho_gm"
-            ],
-            "calculation": {
-                "type": "formula",
-                "operation": "calc_overturning_streamfunction",
-                "args": [
-                    "ty_trans_rho",
-                    "ty_trans_rho_gm"
-                ],
-                "kwargs": {
-                    "depth_coord": {
-                        "literal": "potrho"
-                    }
-                }
-            },
-            "CF standard Name": ""
-        },
-        "msftmz": {
-            "dimensions": {
-                "time": "time",
-                "st_ocean": "lev",
-                "yu_ocean": "latitude"
-            },
-            "units": "kg s-1",
-            "positive": null,
-            "model_variables": [
-                "ty_trans",
-                "ty_trans_gm",
-                "ty_trans_submeso"
-            ],
-            "calculation": {
-                "type": "formula",
-                "operation": "calc_overturning_streamfunction",
-                "args": [
-                    "ty_trans",
-                    "ty_trans_gm",
-                    "ty_trans_submeso"
-                ]
-            },
-            "CF standard Name": ""
-        },
-        "msftyrho": {
-            "dimensions": {
-                "time": "time",
-                "potrho": "potrho",
-                "yu_ocean": "latitude"
-            },
-            "units": "kg s-1",
-            "positive": null,
-            "model_variables": [
-                "ty_trans_rho",
-                "ty_trans_rho_gm"
-            ],
-            "calculation": {
-                "type": "formula",
-                "operation": "calc_overturning_streamfunction",
-                "args": [
-                    "ty_trans_rho",
-                    "ty_trans_rho_gm"
-                ],
-                "kwargs": {
-                    "depth_coord": {
-                        "literal": "potrho"
-                    }
-                }
-            },
-            "CF standard Name": ""
-        },
-        "msftyz": {
-            "dimensions": {
-                "time": "time",
-                "st_ocean": "lev",
-                "yu_ocean": "latitude"
-            },
-            "units": "kg s-1",
-            "positive": null,
-            "model_variables": [
-                "ty_trans",
-                "ty_trans_gm",
-                "ty_trans_submeso"
-            ],
-            "calculation": {
-                "type": "formula",
-                "operation": "calc_overturning_streamfunction",
-                "args": [
-                    "ty_trans",
-                    "ty_trans_gm",
-                    "ty_trans_submeso"
-                ]
-            },
-            "CF standard Name": ""
-        },
-        "tauuo": {
-            "dimensions": {
-                "time": "time",
-                "yu_ocean": "yu_ocean",
-                "xu_ocean": "xu_ocean"
-            },
-            "units": "N m-2",
-            "positive": null,
-            "model_variables": [
-                "tau_x"
-            ],
-            "calculation": {
-                "type": "direct",
-                "formula": "tau_x"
-            },
-            "CF standard Name": ""
-        },
-        "tauvo": {
-            "dimensions": {
-                "time": "time",
-                "yu_ocean": "yu_ocean",
-                "xu_ocean": "xu_ocean"
-            },
-            "units": "N m-2",
-            "positive": null,
-            "model_variables": [
-                "tau_y"
-            ],
-            "calculation": {
-                "type": "direct",
-                "formula": "tau_y"
-            },
-            "CF standard Name": ""
-        },
         "areacella": {
             "dimensions": {
                 "lat": "lat",
@@ -1358,111 +1223,6 @@
                 "args": []
             },
             "CF standard Name": ""
-        },
-        "evspsblveg": {
-            "dimensions": {
-                "time": "time",
-                "lat": "lat",
-                "lon": "lon"
-            },
-            "units": "kg m-2 s-1",
-            "positive": null,
-            "model_variables": [
-                "fld_s03i297"
-            ],
-            "calculation": {
-                "type": "direct",
-                "formula": "fld_s03i297"
-            },
-            "CF standard Name": "water_evaporation_flux_from_canopy"
-        },
-        "mrfso": {
-            "dimensions": {
-                "time": "time",
-                "lat": "lat",
-                "lon": "lon"
-            },
-            "units": "kg m-2",
-            "positive": null,
-            "model_variables": [
-                "fld_s08i223",
-                "fld_s08i230"
-            ],
-            "calculation": {
-                "type": "formula",
-                "operation": "sum",
-                "args": [
-                    {
-                        "operation": "multiply",
-                        "operands": [
-                            "fld_s08i223",
-                            "fld_s08i230"
-                        ]
-                    }
-                ],
-                "kwargs": {
-                    "dim": {
-                        "literal": "soil_model_level_number"
-                    }
-                }
-            },
-            "CF standard Name": "soil_frozen_water_content"
-        },
-        "mrrob": {
-            "dimensions": {
-                "time": "time",
-                "lat": "lat",
-                "lon": "lon"
-            },
-            "units": "kg m-2 s-1",
-            "positive": null,
-            "model_variables": [
-                "fld_s08i235"
-            ],
-            "calculation": {
-                "type": "direct",
-                "formula": "fld_s08i235"
-            },
-            "CF standard Name": "subsurface_runoff_flux"
-        },
-        "mrfsli": {
-            "dimensions": {
-                "time": "time",
-                "lat": "lat",
-                "lon": "lon"
-            },
-            "units": "kg m-2",
-            "positive": null,
-            "model_variables": [
-                "fld_s08i223",
-                "fld_s08i229"
-            ],
-            "calculation": {
-                "type": "formula",
-                "formula": "multiply",
-                "operands": [
-                    "fld_s08i223",
-                    "fld_s08i229"
-                ]
-            },
-            "CF standard Name": "liquid_water_content_of_soil_layer"
-        },
-        "npp": {
-            "dimensions": {
-                "time": "time",
-                "lat": "lat",
-                "lon": "lon"
-            },
-            "units": "kg m-2 s-1",
-            "positive": "down",
-            "model_variables": [
-                "fld_s03i262"
-            ],
-            "calculation": {
-                "type": "direct",
-                "formula": "fld_s03i262"
-            },
-            "CF standard Name": "net_primary_productivity_of_biomass_expressed_as_carbon"
         },
         "hursmax": {
             "CF standard Name": "relative_humidity",
@@ -1579,6 +1339,94 @@
         }
     },
     "land": {
+        "evspsblveg": {
+            "dimensions": {
+                "time": "time",
+                "lat": "lat",
+                "lon": "lon"
+            },
+            "units": "kg m-2 s-1",
+            "positive": null,
+            "model_variables": [
+                "fld_s03i297"
+            ],
+            "calculation": {
+                "type": "direct",
+                "formula": "fld_s03i297"
+            },
+            "CF standard Name": "water_evaporation_flux_from_canopy"
+        },
+        "mrfso": {
+            "dimensions": {
+                "time": "time",
+                "lat": "lat",
+                "lon": "lon"
+            },
+            "units": "kg m-2",
+            "positive": null,
+            "model_variables": [
+                "fld_s08i223",
+                "fld_s08i230"
+            ],
+            "calculation": {
+                "type": "formula",
+                "operation": "sum",
+                "args": [
+                    {
+                        "operation": "multiply",
+                        "operands": [
+                            "fld_s08i223",
+                            "fld_s08i230"
+                        ]
+                    }
+                ],
+                "kwargs": {
+                    "dim": {
+                        "literal": "soil_model_level_number"
+                    }
+                }
+            },
+            "CF standard Name": "soil_frozen_water_content"
+        },
+        "mrrob": {
+            "dimensions": {
+                "time": "time",
+                "lat": "lat",
+                "lon": "lon"
+            },
+            "units": "kg m-2 s-1",
+            "positive": null,
+            "model_variables": [
+                "fld_s08i235"
+            ],
+            "calculation": {
+                "type": "direct",
+                "formula": "fld_s08i235"
+            },
+            "CF standard Name": "subsurface_runoff_flux"
+        },
+        "mrfsli": {
+            "dimensions": {
+                "time": "time",
+                "lat": "lat",
+                "lon": "lon"
+            },
+            "units": "kg m-2",
+            "positive": null,
+            "model_variables": [
+                "fld_s08i223",
+                "fld_s08i229"
+            ],
+            "calculation": {
+                "type": "formula",
+                "formula": "multiply",
+                "operands": [
+                    "fld_s08i223",
+                    "fld_s08i229"
+                ]
+            },
+            "CF standard Name": "frozen_water_content_of_soil_layer"
+        },
         "cLand": {
             "dimensions": {
                 "time": "time",
@@ -3151,7 +2999,7 @@
                     "landfrac": "fld_s03i395"
                 }
             },
-            "CF standard Name": "land_area_fraction"
+            "CF standard Name": "land_ice_area_fraction"
         },
         "residualFrac": {
             "dimensions": {
@@ -3559,6 +3407,108 @@
         }
     },
     "ocean": {
+        "msftmrho": {
+            "dimensions": {
+                "time": "time",
+                "potrho": "potrho",
+                "yu_ocean": "latitude"
+            },
+            "units": "kg s-1",
+            "positive": null,
+            "model_variables": [
+                "ty_trans_rho",
+                "ty_trans_rho_gm"
+            ],
+            "calculation": {
+                "type": "formula",
+                "operation": "calc_overturning_streamfunction",
+                "args": [
+                    "ty_trans_rho",
+                    "ty_trans_rho_gm"
+                ],
+                "kwargs": {
+                    "depth_coord": {
+                        "literal": "potrho"
+                    }
+                }
+            },
+            "CF standard Name": ""
+        },
+        "msftmz": {
+            "dimensions": {
+                "time": "time",
+                "st_ocean": "lev",
+                "yu_ocean": "latitude"
+            },
+            "units": "kg s-1",
+            "positive": null,
+            "model_variables": [
+                "ty_trans",
+                "ty_trans_gm",
+                "ty_trans_submeso"
+            ],
+            "calculation": {
+                "type": "formula",
+                "operation": "calc_overturning_streamfunction",
+                "args": [
+                    "ty_trans",
+                    "ty_trans_gm",
+                    "ty_trans_submeso"
+                ]
+            },
+            "CF standard Name": ""
+        },
+        "msftyrho": {
+            "dimensions": {
+                "time": "time",
+                "potrho": "potrho",
+                "yu_ocean": "latitude"
+            },
+            "units": "kg s-1",
+            "positive": null,
+            "model_variables": [
+                "ty_trans_rho",
+                "ty_trans_rho_gm"
+            ],
+            "calculation": {
+                "type": "formula",
+                "operation": "calc_overturning_streamfunction",
+                "args": [
+                    "ty_trans_rho",
+                    "ty_trans_rho_gm"
+                ],
+                "kwargs": {
+                    "depth_coord": {
+                        "literal": "potrho"
+                    }
+                }
+            },
+            "CF standard Name": ""
+        },
+        "msftyz": {
+            "dimensions": {
+                "time": "time",
+                "st_ocean": "lev",
+                "yu_ocean": "latitude"
+            },
+            "units": "kg s-1",
+            "positive": null,
+            "model_variables": [
+                "ty_trans",
+                "ty_trans_gm",
+                "ty_trans_submeso"
+            ],
+            "calculation": {
+                "type": "formula",
+                "operation": "calc_overturning_streamfunction",
+                "args": [
+                    "ty_trans",
+                    "ty_trans_gm",
+                    "ty_trans_submeso"
+                ]
+            },
+            "CF standard Name": ""
+        },
         "areacello": {
             "dimensions": {
                 "yt_ocean": "latitude",
@@ -3574,7 +3524,7 @@
                 "formula": "areacello"
             },
             "ressource_file": "fx.areacello_ACCESS-ESM.nc",
-            "CF standard Name": "areacello"
+            "CF standard Name": "cell_area"
         },
         "agessc": {
             "dimensions": {
@@ -3713,7 +3663,7 @@
                 "yt_ocean": "latitude",
                 "xt_ocean": "longitude"
             },
-            "units": "W m-2",
+            "units": "kg m-2 s-1",
             "positive": null,
             "model_variables": [
                 "wfimelt",
@@ -4496,7 +4446,7 @@
                 "type": "direct",
                 "formula": "tau_x"
             },
-            "CF standard Name": "downward_x_stress_at_sea_water_surface"
+            "CF standard Name": "surface_downward_x_stress"
         },
         "tauvo": {
             "dimensions": {
@@ -4513,7 +4463,7 @@
                 "type": "direct",
                 "formula": "tau_y"
             },
-            "CF standard Name": "downward_y_stress_at_sea_water_surface"
+            "CF standard Name": "surface_downward_y_stress"
         },
         "thetao": {
             "dimensions": {
@@ -4683,7 +4633,7 @@
                 "yt_ocean": "latitude",
                 "xu_ocean": "longitude"
             },
-            "units": "kg/s",
+            "units": "kg s-1",
             "positive": null,
             "model_variables": [
                 "tx_trans",
@@ -4749,7 +4699,7 @@
                 "yu_ocean": "latitude",
                 "xt_ocean": "longitude"
             },
-            "units": "kg/s",
+            "units": "kg s-1",
             "positive": null,
             "model_variables": [
                 "ty_trans",
@@ -4827,7 +4777,7 @@
                 "yt_ocean": "latitude",
                 "xt_ocean": "longitude"
             },
-            "units": "m/sec",
+            "units": "m s-1",
             "positive": null,
             "model_variables": [
                 "wt"
@@ -6092,7 +6042,7 @@
             }
         },
         "sidmassevapsubl": {
-            "CF standard Name": "water_evapotranspiration_flux",
+            "CF standard Name": "tendency_of_sea_ice_amount_due_to_sublimation_and_evaporation",
             "dimensions": {
                 "time": "time",
                 "TLAT": "lat",
@@ -6323,7 +6273,7 @@
             }
         },
         "siflswdtop": {
-            "CF standard Name": "surface_upwelling_shortwave_flux_in_air",
+            "CF standard Name": "surface_downwelling_shortwave_flux_in_air",
             "dimensions": {
                 "time": "time",
                 "TLAT": "lat",
@@ -6518,7 +6468,7 @@
             }
         },
         "sistryubot": {
-            "CF standard Name": "sea_ice_y_stress_at_bottom",
+            "CF standard Name": "upward_y_stress_at_sea_ice_base",
             "dimensions": {
                 "time": "time",
                 "ULAT": "lat",
@@ -6698,7 +6648,7 @@
             }
         },
         "sivol": {
-            "CF standard Name": "sea_ice_thickness",
+            "CF standard Name": "sea_ice_volume",
             "dimensions": {
                 "time": "time",
                 "TLAT": "lat",
