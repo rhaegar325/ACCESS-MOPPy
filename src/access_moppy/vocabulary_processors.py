@@ -11,6 +11,10 @@ import xarray as xr
 
 from access_moppy import _creator
 
+# Module-level cache so that controlled-vocabulary JSON files are read from disk
+# only once per cv_dir, regardless of how many vocabulary objects are created.
+_CV_CACHE: Dict[str, Dict[str, Any]] = {}
+
 
 class VariableNotFoundError(ValueError):
     """
@@ -72,13 +76,15 @@ class CMIP6Vocabulary:
         self.cmip_table: Dict[str, Any] = self._load_table()
 
     def _load_controlled_vocab(self) -> Dict[str, Any]:
-        vocab = {}
-        for entry in files(self.cv_dir).iterdir():
-            if entry.name.endswith(".json"):
-                with as_file(entry) as path:
-                    with open(path, "r", encoding="utf-8") as jf:
-                        vocab.update(json.load(jf))
-        return vocab
+        if self.cv_dir not in _CV_CACHE:
+            vocab: Dict[str, Any] = {}
+            for entry in files(self.cv_dir).iterdir():
+                if entry.name.endswith(".json"):
+                    with as_file(entry) as path:
+                        with open(path, "r", encoding="utf-8") as jf:
+                            vocab.update(json.load(jf))
+            _CV_CACHE[self.cv_dir] = vocab
+        return _CV_CACHE[self.cv_dir]
 
     def _get_experiment(self) -> Dict[str, Any]:
         try:
@@ -552,7 +558,9 @@ class CMIP6Vocabulary:
                 try:
                     current_missing = float(current_missing)
                     if not np.isnan(current_missing):  # Don't double-convert NaN
-                        nan_conditions.append(var == current_missing)
+                        nan_conditions.append(
+                            np.isclose(var, current_missing, rtol=0, atol=1e-3)
+                        )
                 except (ValueError, TypeError):
                     pass
 
@@ -561,7 +569,9 @@ class CMIP6Vocabulary:
                 try:
                     current_fill = float(current_fill)
                     if not np.isnan(current_fill):  # Don't double-convert NaN
-                        nan_conditions.append(var == current_fill)
+                        nan_conditions.append(
+                            np.isclose(var, current_fill, rtol=0, atol=1e-3)
+                        )
                 except (ValueError, TypeError):
                     pass
 

@@ -10,7 +10,6 @@ import numpy as np
 import psutil
 import xarray as xr
 from cftime import date2num
-from dask.distributed import get_client
 
 from access_moppy.utilities import (
     FrequencyMismatchError,
@@ -20,6 +19,19 @@ from access_moppy.utilities import (
     validate_and_resample_if_needed,
     validate_cmip6_frequency_compatibility,
 )
+
+# Module-level pint registry singleton — constructing UnitRegistry is O(100 ms)
+# so it must never be called inside a per-variable loop.
+_PINT_REGISTRY = None
+
+
+def _get_ureg():
+    global _PINT_REGISTRY
+    if _PINT_REGISTRY is None:
+        import pint
+
+        _PINT_REGISTRY = pint.UnitRegistry()
+    return _PINT_REGISTRY
 
 
 class DatasetChunker:
@@ -113,7 +125,8 @@ class DatasetChunker:
         print("  - Time bounds: single chunk")
         print(f"  - Data variables: at least {self.target_chunk_size_mb}MB chunks")
 
-        rechunked_vars = {}
+        rechunked_coords = {}
+        rechunked_data_vars = {}
 
         for var_name in ds.variables:
             var = ds[var_name]
@@ -153,13 +166,19 @@ class DatasetChunker:
                 print(f"  {var_name}: data variable → {chunk_info}")
 
             try:
-                rechunked_vars[var_name] = var.chunk(chunks)
+                rechunked_var = var.chunk(chunks)
             except Exception as e:
                 print(f"Warning: Could not rechunk variable '{var_name}': {e}")
-                rechunked_vars[var_name] = var
+                rechunked_var = var
 
-        # Reconstruct dataset with rechunked variables
-        rechunked_ds = xr.Dataset(rechunked_vars, attrs=ds.attrs)
+            if var_name in ds.coords:
+                rechunked_coords[var_name] = rechunked_var
+            else:
+                rechunked_data_vars[var_name] = rechunked_var
+
+        # Use assign_coords + assign to preserve all dataset metadata
+        # (coordinate attributes, encoding, and dataset structure)
+        rechunked_ds = ds.assign_coords(rechunked_coords).assign(rechunked_data_vars)
         print("✅ Dataset rechunking completed")
 
         return rechunked_ds
@@ -328,6 +347,19 @@ class CMORiser:
                     ds = ds.drop_vars(aux_time_coords)
                 return ds
 
+            # Open the first file once to probe its structure.  This single handle
+            # is reused for both the frequency-validation time-independence check
+            # and the _has_time check below, avoiding a duplicate open and the
+            # file-handle leak that an unguarded open_dataset would cause.
+            with xr.open_dataset(self.input_paths[0], decode_cf=False) as _probe:
+                _probe_dims = set(_probe.dims)
+                _probe_target_vars = (
+                    [v for v in required_vars if v in _probe.data_vars]
+                    if required_vars
+                    else list(_probe.data_vars)
+                )
+                _has_time = any("time" in _probe[v].dims for v in _probe_target_vars)
+
             # Validate frequency consistency and CMIP6 compatibility before concatenation
             # Skip validation for time-independent variables (e.g., areacello, static grids)
             if self.validate_frequency and len(self.input_paths) > 0:
@@ -335,12 +367,7 @@ class CMORiser:
                 # Time-independent variables typically have "fx" (fixed) in their table ID
                 is_time_independent = (
                     self.compound_name and "fx" in self.compound_name.lower()
-                ) or (
-                    # Also check if any input file has no time dimension
-                    len(self.input_paths) > 0
-                    and "time"
-                    not in xr.open_dataset(self.input_paths[0], decode_cf=False).dims
-                )
+                ) or "time" not in _probe_dims
 
                 if is_time_independent:
                     print(
@@ -383,20 +410,6 @@ class CMORiser:
                             f"Could not validate temporal frequency: {e}. "
                             f"Proceeding with concatenation but results may be inconsistent."
                         )
-
-            # Check whether the first file has a time dimension before concatenating.
-            # We check that at least one *data variable* uses the time dimension,
-            # not merely that a bare time coordinate/dimension exists in the file
-            # (e.g. a static grid file like ocean-2d-ht.nc carries time: 1 as a
-            # dimension coordinate but no variable is dimensioned along it).
-            _probe = xr.open_dataset(self.input_paths[0], decode_cf=False)
-            _probe_target_vars = (
-                [v for v in required_vars if v in _probe.data_vars]
-                if required_vars
-                else list(_probe.data_vars)
-            )
-            _has_time = any("time" in _probe[v].dims for v in _probe_target_vars)
-            _probe.close()
 
             if _has_time:
                 self.ds = xr.open_mfdataset(
@@ -489,7 +502,11 @@ class CMORiser:
             # Check if coordinate contains cftime objects
             if coord.size > 0:
                 # Get first value to check type
-                first_val = coord.values.flat[0] if coord.values.size > 0 else None
+                first_val = (
+                    coord.isel({coord.dims[0]: 0}).values.item()
+                    if coord.size > 0
+                    else None
+                )
 
                 if first_val is not None and isinstance(first_val, cftime.datetime):
                     # Extract time encoding attributes
@@ -577,7 +594,7 @@ class CMORiser:
         try:
             import pint
 
-            ureg = pint.UnitRegistry()
+            ureg = _get_ureg()
 
             # Handle empty/None units
             if not actual and not expected:
@@ -667,8 +684,9 @@ class CMORiser:
     def _check_range(self, var: str, vmin: float, vmax: float):
         arr = self.ds[var]
         if hasattr(arr.data, "map_blocks"):
-            too_small = (arr < vmin).any().compute()
-            too_large = (arr > vmax).any().compute()
+            # Fuse both comparisons into one scheduler pass instead of two
+            # separate .compute() calls.
+            too_small, too_large = da.compute((arr < vmin).any(), (arr > vmax).any())
         else:
             too_small = (arr < vmin).any().item()
             too_large = (arr > vmax).any().item()
@@ -844,78 +862,31 @@ class CMORiser:
                 "   Some attributes may be required for CMIP compliance but file will still be written."
             )
 
-        # ========== Memory Check ==========
-        # This section estimates the data size and compares it against available memory
-        # to prevent out-of-memory errors during the write operation.
-
-        def estimate_data_size(ds, cmor_name):
-            total_size = 0
-            for var in ds.variables:
-                vdat = ds[var]
-                # Start with the size of a single element (e.g., 4 bytes for float32)
-                var_size = vdat.dtype.itemsize
-                # Multiply by the size of each dimension to get total elements
-                for dim in vdat.dims:
-                    var_size *= ds.sizes[dim]
-                total_size += var_size
-            # Apply 1.5x overhead factor for safe memory estimation
-            return int(total_size * 1.5)
-
-        # Calculate the estimated data size for this dataset
-        data_size = estimate_data_size(self.ds, self.cmor_name)
-
-        # Get system memory information using psutil
-        available_memory = psutil.virtual_memory().available
-
-        # ========== Dask Client Detection ==========
-        # Check if a Dask distributed client exists, as this affects how we handle
-        # memory management. Dask clusters have their own memory limits separate
-        # from system memory.
-
-        client = None
-        worker_memory = None  # Memory limit of a single worker
-
-        try:
-            # Attempt to get an existing Dask client
-            client = get_client()
-
-            # Retrieve information about all workers in the cluster
-            worker_info = client.scheduler_info()["workers"]
-
-            if worker_info:
-                # Get the minimum memory_limit across all workers
-                worker_memory = min(w["memory_limit"] for w in worker_info.values())
-
-        except ValueError:
-            # No Dask client exists - we'll use local/system memory for writing
-            pass
-
-        # ========== Memory Validation Logic ==========
-        # This section implements a decision tree based on data size vs available memory:
-
-        if client is not None:
-            # Dask client exists - check against cluster memory limits
-            if data_size > worker_memory:
-                # WARNING: Data fits in total cluster memory but exceeds single worker capacity
-                print(
-                    f"Warning: Data size ({data_size / 1024**3:.2f} GB) exceeds single worker memory "
-                    f"({worker_memory / 1024**3:.2f} GB)."
-                )
-                print("Closing Dask client to use local memory for writing...")
-                client.close()
-                client = None
-                # Refresh available memory after closing client
-                available_memory = psutil.virtual_memory().available
-
-        # Check if chunked writing is needed
+        # ========== Chunked vs Eager Write Decision ==========
+        # Use chunked writing only when the main variable is dask-backed and a
+        # chunker is configured.  For dask arrays, memory is managed by the
+        # dask scheduler; a system-level psutil check is not meaningful there.
         main_var = self.ds[self.cmor_name]
         is_dask_array = isinstance(main_var.data, da.Array)
         use_chunked_write = is_dask_array and self.chunker is not None
 
         if use_chunked_write:
-            print(f"📦 Dataset size: {data_size / 1024**3:.2f} GB")
-            print("   Using chunked writing with DatasetChunker")
+            print("📦 Using chunked writing with DatasetChunker")
         else:
+            # Eager write: estimate size and guard against OOM before starting.
+            def estimate_data_size(ds):
+                total_size = 0
+                for var in ds.variables:
+                    vdat = ds[var]
+                    var_size = vdat.dtype.itemsize
+                    for dim in vdat.dims:
+                        var_size *= ds.sizes[dim]
+                    total_size += var_size
+                return int(total_size * 1.5)
+
+            data_size = estimate_data_size(self.ds)
+            available_memory = psutil.virtual_memory().available
+
             if data_size > available_memory:
                 raise MemoryError(
                     f"Data size ({data_size / 1024**3:.2f} GB) exceeds available system memory "
@@ -964,6 +935,8 @@ class CMORiser:
             # Combined with our chunking strategy (at least 4MB chunks), this optimizes
             # both file layout and chunk size for efficient I/O operations.
             created_vars = {}
+            # Cache decoded-time flag per variable so PHASE 2 never re-materialises.
+            decoded_time_vars = {}
             for var in self.ds.variables:
                 vdat = self.ds[var]
 
@@ -984,11 +957,17 @@ class CMORiser:
 
                     # Decoded time coordinates (datetime64 or cftime) must be stored
                     # as float64 in netCDF4; use "f8" instead of str(vdat.dtype).
+                    # For object-dtype arrays peek at a single element to avoid a
+                    # full .compute() on potentially large dask arrays.
                     _is_decoded_time = np.issubdtype(vdat.dtype, np.datetime64) or (
                         vdat.dtype == object
                         and vdat.size > 0
-                        and hasattr(vdat.values.flat[0], "year")
+                        and hasattr(
+                            vdat.isel({d: 0 for d in vdat.dims}).values.flat[0],
+                            "year",
+                        )
                     )
+                    decoded_time_vars[var] = _is_decoded_time
                     nc_dtype = "f8" if _is_decoded_time else str(vdat.dtype)
 
                     # Apply HDF5 optimization features for chunked variables:
@@ -1118,11 +1097,8 @@ class CMORiser:
                     else:
                         # Direct write for small/non-Dask/non-time variables
                         # Encode decoded time back to numeric float64 for netCDF4
-                        _is_decoded_time = np.issubdtype(vdat.dtype, np.datetime64) or (
-                            vdat.dtype == object
-                            and vdat.size > 0
-                            and hasattr(vdat.values.flat[0], "year")
-                        )
+                        # Reuse the flag cached during PHASE 1 — no extra compute.
+                        _is_decoded_time = decoded_time_vars.get(var, False)
                         if _is_decoded_time:
                             units = vdat.attrs.get("units") or vdat.encoding.get(
                                 "units"
