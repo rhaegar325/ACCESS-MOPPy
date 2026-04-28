@@ -1882,15 +1882,16 @@ class TestLoadDatasetFxFile:
 
 class TestHasTimeProbeLogic:
     """
-    Tests for the _has_time probe fallback in load_dataset (base.py ~line 366).
+    Tests for the _has_time probe logic in load_dataset (base.py).
 
-    When none of the required variables exist in the probe file,
-    _probe_target_vars is empty and the original `any([])` returned False,
-    causing the code to open only the first file (fx branch).
+    The key scenario: required_vars contains spatial-bounds variables
+    (lat_bnds, lon_bnds) that ARE in the probe file but have no time dim.
+    The original if/else code would set _has_time=False via the if-branch
+    (target vars found but none time-dependent), never reaching the else,
+    causing a time-series file to be opened with the wrong (fx) branch.
 
-    The fix: when _probe_target_vars is empty, check whether ANY data
-    variable in the file has a time dimension so that time-series files
-    are still opened with open_mfdataset.
+    The fix: use `or` so that when target vars aren't time-dependent the
+    code still falls back to checking all data_vars for a time dimension.
     """
 
     @pytest.fixture
@@ -1966,10 +1967,12 @@ class TestHasTimeProbeLogic:
         file IS time-dependent, load_dataset must call open_mfdataset (not
         fall through to the single-file fx branch).
 
-        Before the fix: any([]) == False → _has_time = False → open_dataset
-        called on only the first file.
-        After the fix: falls back to checking other data vars for a time dim
-        → _has_time = True → open_mfdataset called correctly.
+        Before the fix (if/else): target vars lat_bnds and lon_bnds are found
+        in the probe but have no time dim → _has_time = False → open_dataset
+        called on only the first file.  The else branch was dead code because
+        _probe_target_vars was never empty (spatial bounds are always present).
+        After the fix (or): falls back to checking all data vars for a time dim
+        → time_bnds found → _has_time = True → open_mfdataset called correctly.
         """
         cmoriser = CMORiser(
             input_paths=[str(time_series_nc_without_target)],
@@ -1989,7 +1992,10 @@ class TestHasTimeProbeLogic:
                 {"time_bnds": (["time", "bnds"], np.zeros((3, 2)))},
                 coords={"time": np.arange(3, dtype=float)},
             )
-            cmoriser.load_dataset(required_vars={"fld_s16i201", "time_bnds"})
+            # required_vars has only spatial-bounds vars (no time_bnds), so
+            # _probe_target_vars = [lat_bnds, lon_bnds] — neither time-dependent.
+            # The fallback `or` branch must fire to detect the time dimension.
+            cmoriser.load_dataset(required_vars={"fld_s16i201", "lat_bnds", "lon_bnds"})
 
         mock_mfd.assert_called_once()
 
