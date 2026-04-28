@@ -370,7 +370,7 @@ class CMORiser:
                 # time-series variable.  We then confirm by checking whether any of
                 # the required vars that are actually present in the probe file carry
                 # a time dimension (e.g. time_bnds when the model variable is absent).
-                _has_time = ("time" in required_vars) and any(
+                _has_time = (required_vars is None or "time" in required_vars) and any(
                     "time" in _probe[v].dims for v in _probe_target_vars
                 )
 
