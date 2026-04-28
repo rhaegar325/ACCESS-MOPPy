@@ -3187,7 +3187,7 @@
                 "fld_s03i395"
             ],
             "calculation": {
-                "type": "operation",
+                "type": "formula",
                 "operation": "divide",
                 "args": [
                     "fld_s03i262",
@@ -4223,7 +4223,7 @@
                 "wfiform"
             ],
             "calculation": {
-                "type": "operation",
+                "type": "formula",
                 "operation": "add",
                 "args": [
                     "wfimelt",
