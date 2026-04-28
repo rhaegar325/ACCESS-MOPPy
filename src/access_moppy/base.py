@@ -436,31 +436,22 @@ class CMORiser:
                     parallel=True,  # <--- enables concurrent preprocessing
                 )
             else:
-                # Time-independent (fx) file — do not add a spurious time dimension
+                # Time-independent (fx) file — do not add a spurious time dimension.
+                # Exclude any time-related coordinates already identified in the probe
+                # so they are never read into memory at all.
+                _time_vars_to_drop = [
+                    c for c in _probe.coords if "time" in c.lower()
+                ]
                 self.ds = xr.open_dataset(
                     self.input_paths[0],
                     engine="netcdf4",
                     decode_cf=False,
                     chunks={},
+                    drop_variables=_time_vars_to_drop,
                 )
                 if required_vars:
                     vars_to_keep = [v for v in required_vars if v in self.ds.data_vars]
                     self.ds = self.ds[vars_to_keep]
-                    # Drop coordinates not used as dimensions by the kept variables.
-                    # xr.Dataset.__getitem__ retains all coordinates (including scalar
-                    # "time" present in many UM fx files), so we must explicitly remove
-                    # any that are not actual dimensions of the retained data variables.
-                    used_dims = set()
-                    for var in vars_to_keep:
-                        used_dims.update(self.ds[var].dims)
-                    coords_to_drop = [c for c in self.ds.coords if c not in used_dims]
-                    if coords_to_drop:
-                        self.ds = self.ds.drop_vars(coords_to_drop)
-                        logger.debug(
-                            "Dropped %d unused coordinate(s) from fx dataset: %s",
-                            len(coords_to_drop),
-                            coords_to_drop,
-                        )
 
         # Apply temporal resampling if enabled and needed
         if self.enable_resampling and self.compound_name:
