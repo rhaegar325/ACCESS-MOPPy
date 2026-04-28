@@ -366,15 +366,12 @@ class CMORiser:
                     if required_vars
                     else list(_probe.data_vars)
                 )
-                # First check target vars; if none of them are time-dependent (or
-                # none are in the file at all), fall back to checking every data_var
-                # so that time-series files are still opened with open_mfdataset even
-                # when the required model variable is absent from the probe file.
-                _has_time = any(
+                # "time" in required_vars is the canonical signal that this is a
+                # time-series variable.  We then confirm by checking whether any of
+                # the required vars that are actually present in the probe file carry
+                # a time dimension (e.g. time_bnds when the model variable is absent).
+                _has_time = ("time" in required_vars) and any(
                     "time" in _probe[v].dims for v in _probe_target_vars
-                ) or (
-                    "time" in _probe.dims
-                    and any("time" in _probe[v].dims for v in _probe.data_vars)
                 )
 
             # Validate frequency consistency and CMIP6 compatibility before concatenation

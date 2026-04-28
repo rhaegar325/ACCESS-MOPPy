@@ -1884,14 +1884,15 @@ class TestHasTimeProbeLogic:
     """
     Tests for the _has_time probe logic in load_dataset (base.py).
 
-    The key scenario: required_vars contains spatial-bounds variables
-    (lat_bnds, lon_bnds) that ARE in the probe file but have no time dim.
-    The original if/else code would set _has_time=False via the if-branch
-    (target vars found but none time-dependent), never reaching the else,
-    causing a time-series file to be opened with the wrong (fx) branch.
+    Logic:
+        _has_time = ("time" in required_vars) and any(
+            "time" in _probe[v].dims for v in _probe_target_vars
+        )
 
-    The fix: use `or` so that when target vars aren't time-dependent the
-    code still falls back to checking all data_vars for a time dimension.
+    "time" in required_vars is the canonical signal for a time-series variable
+    (fx mappings never include a time dimension).  The second condition confirms
+    that at least one required variable present in the probe file actually carries
+    a time axis — typically time_bnds when the model variable is missing.
     """
 
     @pytest.fixture
@@ -1967,12 +1968,9 @@ class TestHasTimeProbeLogic:
         file IS time-dependent, load_dataset must call open_mfdataset (not
         fall through to the single-file fx branch).
 
-        Before the fix (if/else): target vars lat_bnds and lon_bnds are found
-        in the probe but have no time dim → _has_time = False → open_dataset
-        called on only the first file.  The else branch was dead code because
-        _probe_target_vars was never empty (spatial bounds are always present).
-        After the fix (or): falls back to checking all data vars for a time dim
-        → time_bnds found → _has_time = True → open_mfdataset called correctly.
+        "time" is in required_vars (time-series signal) and time_bnds is both in
+        required_vars and in the probe file's data_vars with a time dimension, so
+        _has_time = True even though the model variable itself is absent.
         """
         cmoriser = CMORiser(
             input_paths=[str(time_series_nc_without_target)],
@@ -1992,10 +1990,11 @@ class TestHasTimeProbeLogic:
                 {"time_bnds": (["time", "bnds"], np.zeros((3, 2)))},
                 coords={"time": np.arange(3, dtype=float)},
             )
-            # required_vars has only spatial-bounds vars (no time_bnds), so
-            # _probe_target_vars = [lat_bnds, lon_bnds] — neither time-dependent.
-            # The fallback `or` branch must fire to detect the time dimension.
-            cmoriser.load_dataset(required_vars={"fld_s16i201", "lat_bnds", "lon_bnds"})
+            # realistic required_vars for a daily zg: includes "time" (time-series
+            # signal) and time_bnds (present in probe with decode_cf=False)
+            cmoriser.load_dataset(
+                required_vars={"fld_s16i201", "time", "time_bnds", "lat_bnds", "lon_bnds"}
+            )
 
         mock_mfd.assert_called_once()
 
@@ -2031,8 +2030,8 @@ class TestHasTimeProbeLogic:
         self, mock_vocab, mock_mapping, tmp_path
     ):
         """
-        Baseline: when the required variable IS in the probe file and is
-        time-dependent, open_mfdataset must be called (unmodified behavior).
+        Baseline: required_vars contains "time" AND the model variable is in
+        the probe file with a time dimension → open_mfdataset is called.
         """
         nc_path = tmp_path / "with_target.nc"
         ds = xr.Dataset(
@@ -2069,6 +2068,36 @@ class TestHasTimeProbeLogic:
             patch.object(cmoriser, "_normalize_missing_values_early"),
         ):
             mock_mfd.return_value = ds
-            cmoriser.load_dataset(required_vars={"fld_s16i201"})
+            cmoriser.load_dataset(required_vars={"fld_s16i201", "time"})
 
         mock_mfd.assert_called_once()
+
+    @pytest.mark.unit
+    def test_time_not_in_required_vars_short_circuits_to_false(
+        self, mock_vocab, mock_mapping, time_series_nc_without_target, tmp_path
+    ):
+        """
+        When "time" is absent from required_vars the AND short-circuits to False
+        and open_mfdataset must NOT be called, even if the file itself is a
+        time-series file.  This ensures fx-like variables are never accidentally
+        opened with open_mfdataset just because the probe file happens to have
+        a time dimension.
+        """
+        cmoriser = CMORiser(
+            input_paths=[str(time_series_nc_without_target)],
+            output_path=str(tmp_path),
+            vocab=mock_vocab,
+            variable_mapping=mock_mapping,
+            compound_name="fx.areacella",
+            validate_frequency=False,
+            enable_chunking=False,
+        )
+
+        with (
+            patch("access_moppy.base.xr.open_mfdataset") as mock_mfd,
+            patch.object(cmoriser, "_normalize_missing_values_early"),
+        ):
+            # No "time" in required_vars → _has_time = False regardless of file content
+            cmoriser.load_dataset(required_vars={"fld_s16i201", "lat_bnds", "lon_bnds"})
+
+        mock_mfd.assert_not_called()
