@@ -1293,24 +1293,18 @@ def detect_time_frequency_lazy(
                     calendar=calendar,
                     only_use_cftime_datetimes=False,
                 )
-                # Convert to pandas datetime if possible for better frequency inference
-                if hasattr(dates[0], "strftime"):  # Standard datetime
-                    time_index = pd.to_datetime(
-                        [d.strftime("%Y-%m-%d %H:%M:%S") for d in dates]
-                    )
-                else:  # cftime datetime
-                    # For cftime objects, use a more manual approach
-                    time_diffs = []
-                    for i in range(1, len(dates)):
-                        diff = dates[i] - dates[i - 1]
-                        # Convert to total seconds
-                        total_seconds = diff.days * 86400 + diff.seconds
-                        time_diffs.append(total_seconds)
+                # Compute differences directly to avoid pd.to_datetime failing on
+                # very old dates (e.g. year 3 CE, below pandas Timestamp minimum).
+                time_diffs = []
+                for i in range(1, len(dates)):
+                    diff = dates[i] - dates[i - 1]
+                    total_seconds = diff.days * 86400 + diff.seconds
+                    time_diffs.append(total_seconds)
 
-                    if time_diffs:
-                        avg_seconds = np.mean(time_diffs)
-                        return pd.Timedelta(seconds=avg_seconds)
-                    return None
+                if time_diffs:
+                    avg_seconds = np.mean(time_diffs)
+                    return pd.Timedelta(seconds=avg_seconds)
+                return None
             except (ValueError, OverflowError) as e:
                 # If numeric conversion fails, try treating as datetime64
                 if np.issubdtype(time_sample.values.dtype, np.datetime64):
@@ -1509,11 +1503,6 @@ def _detect_frequency_from_bounds(
                 b_start_raw = float(bounds_sample.values[0, 0])
                 b_end_raw   = float(bounds_sample.values[0, 1])
                 b_diff_raw  = abs(b_end_raw - b_start_raw)
-                print(
-                    f"[bounds debug] size={time_var.size}"
-                    f"  b_start={b_start_raw}  b_end={b_end_raw}"
-                    f"  b_diff={b_diff_raw}"
-                )
 
                 if b_diff_raw > 0:
                     discard = False
@@ -1524,12 +1513,6 @@ def _detect_frequency_from_bounds(
                             {time_coord: slice(0, 2)}
                         ).compute().values
                         t_diff_raw = abs(float(t_raw[1]) - float(t_raw[0]))
-                        print(
-                            f"[bounds debug] t_raw[0]={float(t_raw[0])}"
-                            f"  t_raw[1]={float(t_raw[1])}"
-                            f"  t_diff={t_diff_raw}"
-                            f"  ratio={t_diff_raw / b_diff_raw:.1f}"
-                        )
                         if t_diff_raw / b_diff_raw > 10:
                             discard = True
 
@@ -1541,10 +1524,6 @@ def _detect_frequency_from_bounds(
                         b_lo = min(b_start_raw, b_end_raw)
                         b_hi = max(b_start_raw, b_end_raw)
                         rel_pos = (t0_raw - b_lo) / (b_hi - b_lo)
-                        print(
-                            f"[bounds debug] t0={t0_raw}"
-                            f"  rel_pos={rel_pos:.3f}"
-                        )
                         if rel_pos > 0.9:
                             discard = True
 
@@ -1557,7 +1536,7 @@ def _detect_frequency_from_bounds(
                         return None
 
             except Exception as exc:
-                print(f"[bounds debug] cross-validation exception: {exc!r}")
+                logger.debug("time_bnds cross-validation failed: %r", exc)
 
             return frequency
 
