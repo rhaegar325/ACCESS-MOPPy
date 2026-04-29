@@ -1318,7 +1318,24 @@ def detect_time_frequency_lazy(
                 else:
                     raise e
         else:
-            # Assume already in datetime format
+            # No units attribute. Values may be cftime objects (e.g. ocean model
+            # output with a non-standard calendar stored without CF units).
+            # pd.to_datetime cannot handle cftime objects for very old calendar
+            # dates (year < ~1677), so compute differences directly from the
+            # objects instead of going through pandas datetime parsing.
+            if time_sample.values.dtype == object:
+                try:
+                    time_diffs = []
+                    for i in range(1, len(time_sample.values)):
+                        diff = time_sample.values[i] - time_sample.values[i - 1]
+                        total_seconds = diff.days * 86400 + diff.seconds
+                        time_diffs.append(total_seconds)
+                    if time_diffs:
+                        avg_seconds = np.mean(time_diffs)
+                        return pd.Timedelta(seconds=avg_seconds)
+                except Exception:
+                    pass
+            # Fallback: assume already in a pandas-compatible datetime format
             time_index = pd.to_datetime(time_sample.values)
 
         # Infer frequency from pandas
