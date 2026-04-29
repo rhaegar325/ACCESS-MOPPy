@@ -1275,7 +1275,10 @@ def detect_time_frequency_lazy(
     try:
         # Handle different time formats
         units = time_var.attrs.get("units")
-        calendar = time_var.attrs.get("calendar", "standard")
+        calendar = (
+            time_var.attrs.get("calendar")
+            or time_var.attrs.get("calendar_type", "standard")
+        ).lower()
 
         # Check if values are already datetime64 (even if units suggest otherwise)
         if np.issubdtype(time_sample.values.dtype, np.datetime64):
@@ -1423,11 +1426,15 @@ def _detect_frequency_from_bounds(
             )
             return None
 
-        # Get units and calendar from bounds or time coordinate
+        # Get units and calendar from bounds or time coordinate.
+        # Ocean models (e.g. MOM) use the non-standard "calendar_type" attribute
+        # instead of the CF-standard "calendar" attribute.
         units = bounds_var.attrs.get("units") or time_var.attrs.get("units")
-        calendar = bounds_var.attrs.get("calendar") or time_var.attrs.get(
-            "calendar", "standard"
-        )
+        calendar = (
+            bounds_var.attrs.get("calendar")
+            or time_var.attrs.get("calendar")
+            or time_var.attrs.get("calendar_type", "standard")
+        ).lower()
 
         if units and "since" in units:
             # Convert bounds to datetime objects
@@ -1472,6 +1479,68 @@ def _detect_frequency_from_bounds(
                         f"Inconsistent time intervals detected in bounds: "
                         f"{frequency} vs {pd.Timedelta(seconds=total_seconds2)}"
                     )
+
+            # Cross-validate using raw numeric values.
+            # time_bnds and the time coordinate share the same numeric units, so
+            # raw comparisons are valid without unit conversion.
+            # Two complementary checks cover both single- and multi-timestep files:
+            #   Check 1 (>=2 time steps): actual time-step >> bounds interval
+            #   Check 2 (any count)     : center time is at the very END of bounds,
+            #                             not in the middle as expected for a proper
+            #                             averaging-period representation
+            try:
+                b_start_raw = float(bounds_sample.values[0, 0])
+                b_end_raw   = float(bounds_sample.values[0, 1])
+                b_diff_raw  = abs(b_end_raw - b_start_raw)
+                print(
+                    f"[bounds debug] size={time_var.size}"
+                    f"  b_start={b_start_raw}  b_end={b_end_raw}"
+                    f"  b_diff={b_diff_raw}"
+                )
+
+                if b_diff_raw > 0:
+                    discard = False
+
+                    # Check 1: time-step >> bounds interval (requires >=2 points)
+                    if not discard and time_var.size >= 2:
+                        t_raw = time_var.isel(
+                            {time_coord: slice(0, 2)}
+                        ).compute().values
+                        t_diff_raw = abs(float(t_raw[1]) - float(t_raw[0]))
+                        print(
+                            f"[bounds debug] t_raw[0]={float(t_raw[0])}"
+                            f"  t_raw[1]={float(t_raw[1])}"
+                            f"  t_diff={t_diff_raw}"
+                            f"  ratio={t_diff_raw / b_diff_raw:.1f}"
+                        )
+                        if t_diff_raw / b_diff_raw > 10:
+                            discard = True
+
+                    # Check 2: center time at the very END of the bounds window
+                    if not discard:
+                        t0_raw = float(
+                            time_var.isel({time_coord: 0}).compute().values
+                        )
+                        b_lo = min(b_start_raw, b_end_raw)
+                        b_hi = max(b_start_raw, b_end_raw)
+                        rel_pos = (t0_raw - b_lo) / (b_hi - b_lo)
+                        print(
+                            f"[bounds debug] t0={t0_raw}"
+                            f"  rel_pos={rel_pos:.3f}"
+                        )
+                        if rel_pos > 0.9:
+                            discard = True
+
+                    if discard:
+                        logger.debug(
+                            "time_bnds interval (%g raw units) does not represent "
+                            "the data frequency; skipping bounds-based detection",
+                            b_diff_raw,
+                        )
+                        return None
+
+            except Exception as exc:
+                print(f"[bounds debug] cross-validation exception: {exc!r}")
 
             return frequency
 
