@@ -1243,39 +1243,6 @@ def detect_time_frequency_lazy(
 
     # Method 2: Try to detect frequency from time bounds (CF-compliant approach)
     bounds_freq = _detect_frequency_from_bounds(ds, time_coord)
-    if bounds_freq is not None and time_var.size >= 2:
-        # Cross-validate bounds against actual time coordinate differences.
-        # Some ocean models (e.g. MOM) store time_bnds as a sub-daily precision window
-        # around the center time rather than the monthly averaging period.  When the
-        # bounds-derived interval is more than 10x smaller than the real time-step, the
-        # bounds are not representing the data frequency and we fall through to Method 3.
-        try:
-            t_units = time_var.attrs.get("units")
-            t_cal = (
-                time_var.attrs.get("calendar")
-                or time_var.attrs.get("calendar_type", "standard")
-            ).lower()
-            if t_units and "since" in t_units:
-                t_sample = time_var.isel({time_coord: slice(0, 2)}).compute()
-                t_dates = num2date(
-                    t_sample.values,
-                    units=t_units,
-                    calendar=t_cal,
-                    only_use_cftime_datetimes=False,
-                )
-                d = t_dates[1] - t_dates[0]
-                t_diff_secs = d.days * 86400 + d.seconds
-                if t_diff_secs > 0 and t_diff_secs / bounds_freq.total_seconds() > 10:
-                    logger.debug(
-                        "Bounds frequency (%s) is much smaller than time-coordinate "
-                        "differences (%d s); bounds likely do not represent data "
-                        "frequency — falling through to time-differences method",
-                        bounds_freq,
-                        t_diff_secs,
-                    )
-                    bounds_freq = None
-        except Exception:
-            pass
     if bounds_freq is not None:
         logger.debug("Detected frequency from time bounds: %s", bounds_freq)
         return bounds_freq
@@ -1512,6 +1479,35 @@ def _detect_frequency_from_bounds(
                         f"Inconsistent time intervals detected in bounds: "
                         f"{frequency} vs {pd.Timedelta(seconds=total_seconds2)}"
                     )
+
+            # Cross-validate against raw time-coordinate differences.
+            # time_bnds and the time coordinate share the same numeric units in any
+            # well-formed NetCDF file, so we can compare their raw differences
+            # directly — no unit conversion needed.  This catches the case where
+            # time_bnds stores a sub-interval window (e.g. 0.5 days around the
+            # centre timestamp) rather than the actual averaging period (28-31 days
+            # for monthly data), which would otherwise fool frequency detection.
+            if time_var.size >= 2:
+                try:
+                    t_raw = time_var.isel(
+                        {time_coord: slice(0, 2)}
+                    ).compute().values
+                    b_diff_raw = abs(
+                        float(bounds_sample.values[0, 1])
+                        - float(bounds_sample.values[0, 0])
+                    )
+                    t_diff_raw = abs(float(t_raw[1]) - float(t_raw[0]))
+                    if b_diff_raw > 0 and t_diff_raw / b_diff_raw > 10:
+                        logger.debug(
+                            "Bounds raw interval (%g) << time-step raw interval (%g);"
+                            " time_bnds does not represent the data frequency,"
+                            " skipping bounds-based detection",
+                            b_diff_raw,
+                            t_diff_raw,
+                        )
+                        return None
+                except Exception:
+                    pass
 
             return frequency
 
