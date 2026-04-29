@@ -1243,6 +1243,39 @@ def detect_time_frequency_lazy(
 
     # Method 2: Try to detect frequency from time bounds (CF-compliant approach)
     bounds_freq = _detect_frequency_from_bounds(ds, time_coord)
+    if bounds_freq is not None and time_var.size >= 2:
+        # Cross-validate bounds against actual time coordinate differences.
+        # Some ocean models (e.g. MOM) store time_bnds as a sub-daily precision window
+        # around the center time rather than the monthly averaging period.  When the
+        # bounds-derived interval is more than 10x smaller than the real time-step, the
+        # bounds are not representing the data frequency and we fall through to Method 3.
+        try:
+            t_units = time_var.attrs.get("units")
+            t_cal = (
+                time_var.attrs.get("calendar")
+                or time_var.attrs.get("calendar_type", "standard")
+            ).lower()
+            if t_units and "since" in t_units:
+                t_sample = time_var.isel({time_coord: slice(0, 2)}).compute()
+                t_dates = num2date(
+                    t_sample.values,
+                    units=t_units,
+                    calendar=t_cal,
+                    only_use_cftime_datetimes=False,
+                )
+                d = t_dates[1] - t_dates[0]
+                t_diff_secs = d.days * 86400 + d.seconds
+                if t_diff_secs > 0 and t_diff_secs / bounds_freq.total_seconds() > 10:
+                    logger.debug(
+                        "Bounds frequency (%s) is much smaller than time-coordinate "
+                        "differences (%d s); bounds likely do not represent data "
+                        "frequency — falling through to time-differences method",
+                        bounds_freq,
+                        t_diff_secs,
+                    )
+                    bounds_freq = None
+        except Exception:
+            pass
     if bounds_freq is not None:
         logger.debug("Detected frequency from time bounds: %s", bounds_freq)
         return bounds_freq
@@ -1275,7 +1308,10 @@ def detect_time_frequency_lazy(
     try:
         # Handle different time formats
         units = time_var.attrs.get("units")
-        calendar = time_var.attrs.get("calendar", "standard")
+        calendar = (
+            time_var.attrs.get("calendar")
+            or time_var.attrs.get("calendar_type", "standard")
+        ).lower()
 
         # Check if values are already datetime64 (even if units suggest otherwise)
         if np.issubdtype(time_sample.values.dtype, np.datetime64):
@@ -1423,11 +1459,15 @@ def _detect_frequency_from_bounds(
             )
             return None
 
-        # Get units and calendar from bounds or time coordinate
+        # Get units and calendar from bounds or time coordinate.
+        # Ocean models (e.g. MOM) use the non-standard "calendar_type" attribute
+        # instead of the CF-standard "calendar" attribute.
         units = bounds_var.attrs.get("units") or time_var.attrs.get("units")
-        calendar = bounds_var.attrs.get("calendar") or time_var.attrs.get(
-            "calendar", "standard"
-        )
+        calendar = (
+            bounds_var.attrs.get("calendar")
+            or time_var.attrs.get("calendar")
+            or time_var.attrs.get("calendar_type", "standard")
+        ).lower()
 
         if units and "since" in units:
             # Convert bounds to datetime objects
