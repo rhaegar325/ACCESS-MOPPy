@@ -139,6 +139,7 @@ jobs:
           miniconda-version: "latest"
           python-version: 3.11
           environment-file: .conda/environment.yml
+          activate-environment: moppy_env
           auto-update-conda: false
           auto-activate-base: false
           show-channel-urls: true
