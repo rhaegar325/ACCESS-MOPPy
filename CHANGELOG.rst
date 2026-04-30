@@ -4,6 +4,44 @@ Changelog
 This CHANGELOG documents only key changes between versions. For a full description
 of all changes see https://github.com/ACCESS-NRI/ACCESS-MOPPy/releases
 
+moppy-v1.2.0b (2026-04-30)
+---------------------------
+
+**ESMValTool Integration, New Variables & Bug Fixes**
+
+* **ESMValTool integration**: First prototype of ESMValTool integration via
+  ``access_moppy.esmval`` module (#345)
+* **New variables**: ``snc`` (LImon, via tile-based snow fraction derivation),
+  ``sitimefrac``, ``sisnconc``, ``sisnthick``, ``CFday``, ``SIday`` table support
+* **Bug fixes**:
+
+  * Fix nominal resolution calculation logic (#342, #344)
+  * Fix ``calc_zostoga``: reference thickness, temperature-dependent alpha,
+    optional ``temp_ref`` (#288)
+  * Fix ``nep`` and ``npp`` land fraction scaling (#333)
+  * Fix ``sftlf`` mapping issue (#336)
+  * Fix ``mrsos`` mapping issue (#302)
+  * Fix ``mrfso`` mapping issue (#301)
+  * Fix units, CF standard names, and calculations in ACCESS-ESM1.6 mappings (#330)
+  * Fix inconsistencies in ACCESS-ESM1-6 mappings (#319)
+  * Fix time-probe detection issue (#337)
+  * Solve data loading issue (#329)
+
+* **Improvements**:
+
+  * Divide ``ra``, ``rh``, ``nbp`` by land fraction for CMIP land-mean compliance (#333)
+  * Update ACCESS-ESM1.6 mappings to use degC and improve ``ocean_floor`` calculation (#300)
+  * Enhanced logging throughout the codebase for better traceability (#318)
+  * Multiple performance and correctness fixes (#317)
+  * Warn for non-existent CMIP variable or missing model mapping (#316)
+  * Check for newer version on PyPI at import time (#315)
+
+* **Testing & Documentation**:
+
+  * Add integration tests for Ofx variables (#339)
+  * Add developer documentation for variable mapping system (#313)
+  * Bump ``conda-incubator/setup-miniconda`` from 3 to 4 (#327)
+
 moppy-v1.1.0b (2026-04-24)
 ---------------------------
 
