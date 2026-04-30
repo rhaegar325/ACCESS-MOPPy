@@ -1019,7 +1019,6 @@ class TestDetectTimeFrequencyLazyMethod3EdgeCases:
         We use post-1677 cftime dates so pd.to_datetime can handle them via
         strftime strings, confirming the fallback produces a result.
         """
-        dates = [cftime.DatetimeGregorian(2000, m, 15) for m in range(1, 4)]
         bad_dates = [object(), object(), object()]  # subtraction will raise TypeError
         time_values = np.array(bad_dates, dtype=object)
 
