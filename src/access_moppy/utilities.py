@@ -1491,53 +1491,6 @@ def _detect_frequency_from_bounds(
                         f"{frequency} vs {pd.Timedelta(seconds=total_seconds2)}"
                     )
 
-            # Cross-validate using raw numeric values.
-            # time_bnds and the time coordinate share the same numeric units, so
-            # raw comparisons are valid without unit conversion.
-            # Two complementary checks cover both single- and multi-timestep files:
-            #   Check 1 (>=2 time steps): actual time-step >> bounds interval
-            #   Check 2 (any count)     : center time is at the very END of bounds,
-            #                             not in the middle as expected for a proper
-            #                             averaging-period representation
-            try:
-                b_start_raw = float(bounds_sample.values[0, 0])
-                b_end_raw   = float(bounds_sample.values[0, 1])
-                b_diff_raw  = abs(b_end_raw - b_start_raw)
-
-                if b_diff_raw > 0:
-                    discard = False
-
-                    # Check 1: time-step >> bounds interval (requires >=2 points)
-                    if not discard and time_var.size >= 2:
-                        t_raw = time_var.isel(
-                            {time_coord: slice(0, 2)}
-                        ).compute().values
-                        t_diff_raw = abs(float(t_raw[1]) - float(t_raw[0]))
-                        if t_diff_raw / b_diff_raw > 10:
-                            discard = True
-
-                    # Check 2: center time at the very END of the bounds window
-                    if not discard:
-                        t0_raw = float(
-                            time_var.isel({time_coord: 0}).compute().values
-                        )
-                        b_lo = min(b_start_raw, b_end_raw)
-                        b_hi = max(b_start_raw, b_end_raw)
-                        rel_pos = (t0_raw - b_lo) / (b_hi - b_lo)
-                        if rel_pos > 0.9:
-                            discard = True
-
-                    if discard:
-                        logger.debug(
-                            "time_bnds interval (%g raw units) does not represent "
-                            "the data frequency; skipping bounds-based detection",
-                            b_diff_raw,
-                        )
-                        return None
-
-            except Exception as exc:
-                logger.debug("time_bnds cross-validation failed: %r", exc)
-
             return frequency
 
         else:
