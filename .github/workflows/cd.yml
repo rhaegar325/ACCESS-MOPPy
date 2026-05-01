@@ -158,7 +158,7 @@ jobs:
         run: |
           package=$(find /tmp/conda-output -type f \( -name "*.conda" -o -name "*.tar.bz2" \) | head -1)
           echo "Uploading: $package"
-          anaconda upload --user accessnri --label main "$package"
+          conda run -n base anaconda upload --user accessnri --label main "$package"
           echo "✅ Conda package uploaded successfully"
           echo "Version built: ${{ needs.pypi.outputs.version }}"
 
