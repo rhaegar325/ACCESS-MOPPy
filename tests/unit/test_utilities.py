@@ -9,14 +9,17 @@ from unittest.mock import MagicMock, patch
 
 import cftime
 import numpy as np
+import pandas as pd
 import pytest
 import xarray as xr
 
 from access_moppy.utilities import (
+    _detect_frequency_from_bounds,
     _infer_frequency,
     _model_mapping_file_exists,
     calculate_time_bounds,
     create_ilamb_symlinks,
+    detect_time_frequency_lazy,
     get_requested_variables_from_data_request,
 )
 
@@ -839,3 +842,344 @@ class TestModelMappingFileExists:
     def test_returns_false_for_empty_string(self):
         """Returns False for an empty model ID string."""
         assert _model_mapping_file_exists("") is False
+
+
+def _make_ocean_monthly_ds(numeric_units: str = "days since 0001-01-01") -> xr.Dataset:
+    """Build a minimal ocean-model-like dataset with year-3 CE monthly timestamps.
+
+    Mirrors MOM output: numeric time coordinate with CF units, a ``time_bnds``
+    variable that has *no* units attribute, and a non-standard ``calendar_type``
+    attribute instead of the CF ``calendar`` attribute.
+    """
+    # Mid-month values for Jan–Dec of year 3, in days since 0001-01-01
+    # (proleptic Gregorian: year 3 is ordinary, 365 days)
+    # Jan 16 12:00 = 730 + 15.5  days since 0001-01-01
+    year2_days = 365 * 2  # days in years 1 and 2
+    mid_month_offsets = [
+        15.5,
+        45.0,
+        74.5,
+        105.0,
+        135.5,
+        166.0,
+        196.5,
+        227.5,
+        258.0,
+        288.5,
+        319.0,
+        349.5,
+    ]
+    time_values = np.array(
+        [year2_days + d for d in mid_month_offsets], dtype=np.float64
+    )
+
+    # Bounds: first-of-month to first-of-next-month (no units attr on purpose)
+    month_starts = [
+        0.0,
+        31.0,
+        59.0,
+        90.0,
+        120.0,
+        151.0,
+        181.0,
+        212.0,
+        243.0,
+        273.0,
+        304.0,
+        334.0,
+        365.0,
+    ]
+    bnds_values = np.array(
+        [
+            [year2_days + month_starts[i], year2_days + month_starts[i + 1]]
+            for i in range(12)
+        ],
+        dtype=np.float64,
+    )
+
+    ds = xr.Dataset(
+        {"time_bnds": xr.DataArray(bnds_values, dims=["time", "nv"])},
+        coords={
+            "time": xr.DataArray(
+                time_values,
+                dims=["time"],
+                attrs={
+                    "units": numeric_units,
+                    "calendar_type": "PROLEPTIC_GREGORIAN",
+                    "bounds": "time_bnds",
+                },
+            )
+        },
+    )
+    return ds
+
+
+class TestDetectTimeFrequencyLazyOceanMonthly:
+    """Tests for detect_time_frequency_lazy with ocean-model monthly data.
+
+    Ocean model (MOM) output uses very old calendar dates (year 3 CE) stored as
+    numeric offsets with CF units. pandas cannot represent these as Timestamps
+    (minimum ~1677 CE), so the frequency detection must use direct timedelta
+    arithmetic rather than pd.to_datetime.
+    """
+
+    @pytest.mark.unit
+    def test_monthly_frequency_year3_ce(self):
+        """Monthly data in year 3 CE is correctly identified as ~30 days."""
+        ds = _make_ocean_monthly_ds()
+        result = detect_time_frequency_lazy(ds)
+        assert result is not None
+        assert pd.Timedelta("20D") < result < pd.Timedelta("35D")
+
+    @pytest.mark.unit
+    def test_not_half_day(self):
+        """Frequency must not be 0.5 days (the pre-fix wrong result)."""
+        ds = _make_ocean_monthly_ds()
+        result = detect_time_frequency_lazy(ds)
+        assert result is not None
+        assert result > pd.Timedelta(
+            "1D"
+        ), f"Frequency {result} looks like the old 0.5-day wrong result"
+
+    @pytest.mark.unit
+    def test_cftime_object_array_no_units(self):
+        """Object-array of cftime datetimes with no units is handled correctly.
+
+        This covers the ``else`` branch of Method 3 for individual (not
+        concatenated) ocean files where the time coordinate has no ``units``
+        attribute and xarray stores values as a raw object array of cftime
+        datetimes.
+        """
+        dates = [cftime.DatetimeProlepticGregorian(3, m, 16, 12) for m in range(1, 13)]
+        time_values = np.array(dates, dtype=object)
+
+        ds = xr.Dataset(
+            coords={
+                "time": xr.DataArray(
+                    time_values,
+                    dims=["time"],
+                    # No "units" attribute — matches individual ocean file behaviour
+                )
+            }
+        )
+
+        result = detect_time_frequency_lazy(ds)
+        assert result is not None
+        assert pd.Timedelta("20D") < result < pd.Timedelta("35D")
+
+    @pytest.mark.unit
+    def test_result_is_timedelta(self):
+        """Return value is always a pd.Timedelta, not a raw number."""
+        ds = _make_ocean_monthly_ds()
+        result = detect_time_frequency_lazy(ds)
+        assert isinstance(result, pd.Timedelta)
+
+
+class TestDetectTimeFrequencyLazyMethod3EdgeCases:
+    """Cover the remaining unchecked branches of Method 3 in detect_time_frequency_lazy."""
+
+    # ------------------------------------------------------------------
+    # Branch: elif units and "since" in units  →  num2date raises ValueError
+    #         AND values are datetime64  →  pd.to_datetime fallback
+    # ------------------------------------------------------------------
+    @pytest.mark.unit
+    def test_num2date_valueerror_non_datetime64_reraises(self):
+        """ValueError from num2date is re-raised when values are not datetime64."""
+        time_values = np.array([1.0, 31.0, 59.0])
+        ds = xr.Dataset(
+            coords={
+                "time": xr.DataArray(
+                    time_values,
+                    dims=["time"],
+                    attrs={"units": "days since 2000-01-01", "calendar": "standard"},
+                )
+            }
+        )
+
+        with patch("access_moppy.utilities.num2date", side_effect=ValueError("bad")):
+            import warnings
+
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always")
+                result = detect_time_frequency_lazy(ds)
+            assert result is None
+            assert any("bad" in str(warning.message) for warning in w)
+
+    # ------------------------------------------------------------------
+    # Branch: else (no units)  →  object dtype, but subtraction raises
+    #         →  except Exception: pass  →  pd.to_datetime fallback
+    #         →  pd.to_datetime also fails  →  outer except swallows, returns None
+    # ------------------------------------------------------------------
+    @pytest.mark.unit
+    def test_object_array_subtraction_error_swallowed_returns_none(self):
+        """When cftime subtraction raises, the inner except is silenced and execution
+        falls through to pd.to_datetime. Since plain object() values are not
+        convertible, pd.to_datetime also raises, which is caught by the outermost
+        except-Exception handler — so the function returns None with a warning.
+        """
+        bad_dates = [object(), object(), object()]  # subtraction will raise TypeError
+        time_values = np.array(bad_dates, dtype=object)
+
+        ds = xr.Dataset(
+            coords={
+                "time": xr.DataArray(
+                    time_values,
+                    dims=["time"],
+                    # No units — takes the else branch
+                )
+            }
+        )
+
+        import warnings
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = detect_time_frequency_lazy(ds)
+        assert result is None
+        assert len(w) >= 1
+
+    # ------------------------------------------------------------------
+    # Branch: else (no units)  →  non-object dtype  →  pd.to_datetime fallback
+    # ------------------------------------------------------------------
+    @pytest.mark.unit
+    def test_no_units_non_object_dtype_uses_pd_to_datetime(self):
+        """Without units and with datetime64 values, falls through to pd.to_datetime."""
+        time_values = np.array(
+            ["2000-01-15", "2000-02-15", "2000-03-15"], dtype="datetime64[D]"
+        )
+        ds = xr.Dataset(
+            coords={
+                "time": xr.DataArray(
+                    time_values,
+                    dims=["time"],
+                    # No units attr
+                )
+            }
+        )
+        result = detect_time_frequency_lazy(ds)
+        assert result is not None
+        assert pd.Timedelta("20D") < result < pd.Timedelta("35D")
+
+
+class TestDetectFrequencyFromBoundsCrossValidation:
+    """Cover the cross-validation discard paths in _detect_frequency_from_bounds."""
+
+    def _make_ds_with_bounds(self, time_values, bnds_values, units):
+        """Build a minimal dataset with time_bnds for bounds-based detection tests."""
+        ds = xr.Dataset(
+            {"time_bnds": xr.DataArray(bnds_values, dims=["time", "nv"])},
+            coords={
+                "time": xr.DataArray(
+                    time_values,
+                    dims=["time"],
+                    attrs={
+                        "units": units,
+                        "calendar": "standard",
+                        "bounds": "time_bnds",
+                    },
+                )
+            },
+        )
+        ds["time_bnds"].attrs["units"] = units
+        return ds
+
+    @pytest.mark.unit
+    def test_valid_bounds_returns_frequency(self):
+        """Properly centred monthly bounds produce ~30 days."""
+        time_values = np.array([15.0])
+        bnds_values = np.array([[0.0, 30.0]])
+        units = "days since 2000-01-01"
+
+        ds = self._make_ds_with_bounds(time_values, bnds_values, units)
+        result = _detect_frequency_from_bounds(ds, "time")
+        assert result is not None
+        assert pd.Timedelta("20D") < result < pd.Timedelta("35D")
+
+    @pytest.mark.unit
+    def test_no_bounds_variable_returns_none(self):
+        """When the dataset has no time bounds variable at all, return None.
+
+        Exercises the ``if bounds_var is None: return None`` True-branch:
+        neither the ``bounds`` attr lookup nor the name-scan finds anything,
+        so bounds_var remains None and the function returns None early.
+        """
+        ds = xr.Dataset(
+            coords={
+                "time": xr.DataArray(
+                    np.array([15.0, 46.0, 75.0]),
+                    dims=["time"],
+                    attrs={"units": "days since 2000-01-01", "calendar": "standard"},
+                    # No "bounds" attr and no time_bnds/time_bounds in the dataset
+                )
+            }
+        )
+        result = _detect_frequency_from_bounds(ds, "time")
+        assert result is None
+
+    @pytest.mark.unit
+    def test_bounds_found_via_name_scan_not_attr(self):
+        """When time_bnds is present as a data var but time coord has no ``bounds``
+        attr, the name-scan finds it — exercising the ``if bounds_var is None:``
+        False-branch (bounds_var is not None after the for loop).
+        """
+        time_values = np.array([15.0])
+        bnds_values = np.array([[0.0, 30.0]])
+        units = "days since 2000-01-01"
+
+        # Deliberately omit the "bounds" attr from the time coordinate so the
+        # function must fall through to the for-loop name scan.
+        ds = xr.Dataset(
+            {
+                "time_bnds": xr.DataArray(
+                    bnds_values, dims=["time", "nv"], attrs={"units": units}
+                )
+            },
+            coords={
+                "time": xr.DataArray(
+                    time_values,
+                    dims=["time"],
+                    attrs={"units": units, "calendar": "standard"},
+                    # No "bounds" attr — forces name-scan path
+                )
+            },
+        )
+        result = _detect_frequency_from_bounds(ds, "time")
+        assert result is not None
+        assert pd.Timedelta("20D") < result < pd.Timedelta("35D")
+
+    @pytest.mark.unit
+    def test_bounds_wrong_shape_returns_none(self):
+        """bounds variable with unexpected shape → warning + return None (line 1430).
+
+        CF-compliant time_bnds must have shape (time, 2). A 1-D array triggers
+        the shape guard and the function returns None.
+        """
+        units = "days since 2000-01-01"
+        ds = xr.Dataset(
+            # 1-D bounds — wrong shape, should be (time, 2)
+            {
+                "time_bnds": xr.DataArray(
+                    np.array([0.0, 30.0]),
+                    dims=["nv"],
+                    attrs={"units": units},
+                )
+            },
+            coords={
+                "time": xr.DataArray(
+                    np.array([15.0]),
+                    dims=["time"],
+                    attrs={
+                        "units": units,
+                        "calendar": "standard",
+                        "bounds": "time_bnds",
+                    },
+                )
+            },
+        )
+        import warnings
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = _detect_frequency_from_bounds(ds, "time")
+        assert result is None
+        assert any("unexpected shape" in str(warning.message) for warning in w)

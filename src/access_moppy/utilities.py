@@ -1275,47 +1275,48 @@ def detect_time_frequency_lazy(
     try:
         # Handle different time formats
         units = time_var.attrs.get("units")
-        calendar = time_var.attrs.get("calendar", "standard")
+        calendar = (
+            time_var.attrs.get("calendar")
+            or time_var.attrs.get("calendar_type", "standard")
+        ).lower()
 
         # Check if values are already datetime64 (even if units suggest otherwise)
         if np.issubdtype(time_sample.values.dtype, np.datetime64):
             # Already datetime64 - use directly
             time_index = pd.to_datetime(time_sample.values)
         elif units and "since" in units:
-            # Convert from numeric time to datetime
-            try:
-                dates = num2date(
-                    time_sample.values,
-                    units=units,
-                    calendar=calendar,
-                    only_use_cftime_datetimes=False,
-                )
-                # Convert to pandas datetime if possible for better frequency inference
-                if hasattr(dates[0], "strftime"):  # Standard datetime
-                    time_index = pd.to_datetime(
-                        [d.strftime("%Y-%m-%d %H:%M:%S") for d in dates]
-                    )
-                else:  # cftime datetime
-                    # For cftime objects, use a more manual approach
+            dates = num2date(
+                time_sample.values,
+                units=units,
+                calendar=calendar,
+                only_use_cftime_datetimes=False,
+            )
+            # Compute differences directly to avoid pd.to_datetime failing on
+            # very old dates (e.g. year 3 CE, below pandas Timestamp minimum).
+            time_diffs = []
+            for i in range(1, len(dates)):
+                diff = dates[i] - dates[i - 1]
+                total_seconds = diff.days * 86400 + diff.seconds
+                time_diffs.append(total_seconds)
+
+            return pd.Timedelta(seconds=np.mean(time_diffs))
+        else:
+            # No units attribute. Values may be cftime objects (e.g. ocean model
+            # output with a non-standard calendar stored without CF units).
+            # pd.to_datetime cannot handle cftime objects for very old calendar
+            # dates (year < ~1677), so compute differences directly from the
+            # objects instead of going through pandas datetime parsing.
+            if time_sample.values.dtype == object:
+                try:
                     time_diffs = []
-                    for i in range(1, len(dates)):
-                        diff = dates[i] - dates[i - 1]
-                        # Convert to total seconds
+                    for i in range(1, len(time_sample.values)):
+                        diff = time_sample.values[i] - time_sample.values[i - 1]
                         total_seconds = diff.days * 86400 + diff.seconds
                         time_diffs.append(total_seconds)
-
-                    if time_diffs:
-                        avg_seconds = np.mean(time_diffs)
-                        return pd.Timedelta(seconds=avg_seconds)
-                    return None
-            except (ValueError, OverflowError) as e:
-                # If numeric conversion fails, try treating as datetime64
-                if np.issubdtype(time_sample.values.dtype, np.datetime64):
-                    time_index = pd.to_datetime(time_sample.values)
-                else:
-                    raise e
-        else:
-            # Assume already in datetime format
+                    return pd.Timedelta(seconds=np.mean(time_diffs))
+                except Exception:
+                    pass
+            # Fallback: assume already in a pandas-compatible datetime format
             time_index = pd.to_datetime(time_sample.values)
 
         # Infer frequency from pandas
@@ -1423,11 +1424,15 @@ def _detect_frequency_from_bounds(
             )
             return None
 
-        # Get units and calendar from bounds or time coordinate
+        # Get units and calendar from bounds or time coordinate.
+        # Ocean models (e.g. MOM) use the non-standard "calendar_type" attribute
+        # instead of the CF-standard "calendar" attribute.
         units = bounds_var.attrs.get("units") or time_var.attrs.get("units")
-        calendar = bounds_var.attrs.get("calendar") or time_var.attrs.get(
-            "calendar", "standard"
-        )
+        calendar = (
+            bounds_var.attrs.get("calendar")
+            or time_var.attrs.get("calendar")
+            or time_var.attrs.get("calendar_type", "standard")
+        ).lower()
 
         if units and "since" in units:
             # Convert bounds to datetime objects
