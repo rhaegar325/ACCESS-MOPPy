@@ -11,8 +11,8 @@ import yaml
 from access_moppy.esmval.config_gen import (
     DEFAULT_CONFIG_FILENAME,
     load_existing_config,
-    merge_into_existing_config,
     write_esmval_config,
+    write_esmval_config_alongside,
 )
 
 
@@ -74,6 +74,20 @@ class TestWriteEsmvalConfig:
         assert "extra-0" in sources
         assert sources["extra-0"]["rootpath"] == str(extra.resolve())
 
+    def test_preserves_existing_extras_on_rerun(self, tmp_path):
+        """Extra-* sources added on a first run survive a subsequent re-run."""
+        cache = tmp_path / "cache"
+        out = tmp_path / "config.yml"
+        extra = tmp_path / "other"
+        # First run: write moppy-cache + extra-0
+        write_esmval_config(cache, output_path=out, extra_rootpaths=[extra])
+        # Second run: no extra_rootpaths supplied — extra-0 should be kept
+        write_esmval_config(cache, output_path=out)
+        data = yaml.safe_load(out.read_text())
+        sources = data["projects"]["CMIP6"]["data"]
+        assert "extra-0" in sources
+        assert sources["extra-0"]["rootpath"] == str(extra.resolve())
+
     def test_tilde_expansion(self, tmp_path):
         """~ in cache_dir should be expanded in the rootpath."""
         out = tmp_path / "config.yml"
@@ -119,13 +133,13 @@ class TestLoadExistingConfig:
         assert result == {}
 
 
-class TestMergeIntoExistingConfig:
+class TestWriteEsmvalConfigAlongside:
     def test_writes_data_source_file_next_to_base(self, tmp_path):
         base = tmp_path / "existing-config.yml"
         base.write_text("# existing config\n")
         cache = tmp_path / "cache"
         out = tmp_path / "moppy-esmval-data.yml"
-        result = merge_into_existing_config(cache, base, output_path=out)
+        result = write_esmval_config_alongside(cache, base, output_path=out)
         assert result == out
         assert out.exists()
 
@@ -134,7 +148,7 @@ class TestMergeIntoExistingConfig:
         base.write_text("")
         cache = tmp_path / "cache"
         out = tmp_path / "merged.yml"
-        merge_into_existing_config(cache, base, output_path=out)
+        write_esmval_config_alongside(cache, base, output_path=out)
         data = yaml.safe_load(out.read_text())
         assert data["projects"]["CMIP6"]["data"]["moppy-cache"]["rootpath"] == str(
             cache.resolve()
@@ -146,14 +160,14 @@ class TestMergeIntoExistingConfig:
         base.write_text(original_content)
         cache = tmp_path / "cache"
         out = tmp_path / "merged.yml"
-        merge_into_existing_config(cache, base, output_path=out)
+        write_esmval_config_alongside(cache, base, output_path=out)
         assert base.read_text() == original_content
 
     def test_default_output_path_is_next_to_base(self, tmp_path):
         base = tmp_path / "my-config.yml"
         base.write_text("")
         cache = tmp_path / "cache"
-        result = merge_into_existing_config(cache, base)
+        result = write_esmval_config_alongside(cache, base)
         assert result == tmp_path / DEFAULT_CONFIG_FILENAME
         assert result.exists()
 
@@ -161,5 +175,7 @@ class TestMergeIntoExistingConfig:
         base = tmp_path / "config.yml"
         base.write_text("")
         out = tmp_path / "out.yml"
-        result = merge_into_existing_config(tmp_path / "cache", base, output_path=out)
+        result = write_esmval_config_alongside(
+            tmp_path / "cache", base, output_path=out
+        )
         assert isinstance(result, Path)

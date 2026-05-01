@@ -116,7 +116,19 @@ def write_esmval_config(
 
     dest.parent.mkdir(parents=True, exist_ok=True)
 
-    # Primary data source
+    # Preserve any extra-* sources the user may have manually added to the
+    # existing file so that a re-run doesn't discard their customisations.
+    existing = load_existing_config(dest)
+    existing_extras: dict[str, Any] = {
+        k: v
+        for k, v in existing.get("projects", {})
+        .get("CMIP6", {})
+        .get("data", {})
+        .items()
+        if k.startswith("extra-") and isinstance(v, dict)
+    }
+
+    # Primary data source (always refreshed with the latest cache_dir)
     data_sources: dict[str, Any] = {
         "moppy-cache": {
             "type": "esmvalcore.io.local.LocalDataSource",
@@ -126,7 +138,10 @@ def write_esmval_config(
         }
     }
 
-    # Optional extra sources
+    # Re-include any extras the user had added manually
+    data_sources.update(existing_extras)
+
+    # Caller-supplied extra rootpaths (indexed from 0; may shadow preserved keys)
     for i, p in enumerate(extra_rootpaths or []):
         resolved = str(Path(p).expanduser().resolve())
         data_sources[f"extra-{i}"] = {
@@ -164,7 +179,7 @@ def load_existing_config(config_path: str | Path) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-def merge_into_existing_config(
+def write_esmval_config_alongside(
     cache_dir: str | Path,
     base_config_path: str | Path,
     output_path: str | Path | None = None,
@@ -179,6 +194,10 @@ def merge_into_existing_config(
     config directory.
 
     *base_config_path* is **not** read or modified.
+
+    Any ``extra-*`` data sources already present in an existing
+    ``moppy-esmval-data.yml`` in that directory are preserved; only
+    the ``moppy-cache`` source is refreshed with the new *cache_dir*.
 
     Parameters
     ----------

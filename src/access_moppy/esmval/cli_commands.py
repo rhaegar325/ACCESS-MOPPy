@@ -204,8 +204,8 @@ def _prepare(
     Returns the path to the written config overlay file.
     """
     from access_moppy.esmval.config_gen import (
-        merge_into_existing_config,
         write_esmval_config,
+        write_esmval_config_alongside,
     )
     from access_moppy.esmval.orchestrator import CMORiseOrchestrator
 
@@ -234,7 +234,7 @@ def _prepare(
 
     # Write ESMValCore config overlay
     if config:
-        cfg_path = merge_into_existing_config(
+        cfg_path = write_esmval_config_alongside(
             cache_dir=cache_dir,
             base_config_path=config,
             output_path=output_config,

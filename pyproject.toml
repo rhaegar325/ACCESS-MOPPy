@@ -169,7 +169,7 @@ pytest-cov = "*"
 access_moppy = { path = ".", editable = true, extras = ["esmval"] }
 
 [tool.pixi.feature.esmval.tasks]
-test-esmval = "pytest tests/unit/test_esmval_recipe_reader.py tests/unit/test_esmval_variable_mapper.py tests/unit/test_esmval_config_gen.py tests/unit/test_esmval_file_finder.py -v"
+test-esmval = "pytest tests/unit/test_esmval_recipe_reader.py tests/unit/test_esmval_variable_mapper.py tests/unit/test_esmval_config_gen.py tests/unit/test_esmval_file_finder.py tests/unit/test_esmval_cli_commands.py tests/unit/test_esmval_orchestrator.py -v"
 
 [tool.pixi.environments]
 default = { solve-group = "default" }
