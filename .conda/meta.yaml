@@ -22,7 +22,7 @@ outputs:
     - name: access-moppy
       build:
           noarch: python
-          script: "{{ PYTHON }} -m pip install . -vv --no-deps"
+      script: build_access_moppy.sh
       requirements:
           host:
               - python

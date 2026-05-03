@@ -116,7 +116,7 @@ jobs:
               - name: access-moppy
                 build:
                     noarch: python
-                script: "$PYTHON -m pip install . -vv --no-deps"
+                script: build_access_moppy.sh
                 requirements:
                     host:
                         - python
@@ -171,6 +171,7 @@ jobs:
               recipe-maintainers:
                   - ACCESS-NRI
           EOF
+          chmod +x .conda-temp/build_access_moppy.sh
           echo "Created temporary conda recipe to use local source (path: ../)"
       - name: Setup conda environment
         uses: conda-incubator/setup-miniconda@v4
