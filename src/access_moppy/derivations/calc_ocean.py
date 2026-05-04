@@ -174,8 +174,10 @@ def calc_zostoga(pot_temp, dzt_ref, areacello, temp_ref=None, depth_coord="st_oc
     # Integrate over depth (lazy with dask)
     integrated_height = thermo_height.sum(dim=depth_coord, skipna=True)
 
-    # Area-weighted global average (lazy with dask)
-    zostoga = integrated_height.weighted(areacello).mean(dim=["yt_ocean", "xt_ocean"])
+    # Area-weighted global average (lazy with dask).
+    # fillna(0) is required: xarray.weighted() rejects NaN weights, and NaN
+    # cells in areacello correspond to land points that carry zero area.
+    zostoga = integrated_height.weighted(areacello.fillna(0)).mean(dim=["yt_ocean", "xt_ocean"])
 
     return zostoga
 
