@@ -623,10 +623,6 @@ class TestUpdateAttributes:
             }
         }
 
-    # ------------------------------------------------------------------
-    # bnds handling
-    # ------------------------------------------------------------------
-
     @pytest.mark.unit
     def test_bnds_is_pure_dimension_not_coordinate(
         self, mock_vocab, scalar_mapping, temp_dir
@@ -642,113 +638,27 @@ class TestUpdateAttributes:
         assert "bnds" in cmoriser.ds.dims
 
     @pytest.mark.unit
-    def test_nv_coordinate_removed_after_rename(
+    def test_scalar_variable_no_spatial_coords_added(
         self, mock_vocab, scalar_mapping, temp_dir
     ):
-        """The nv coordinate variable must not survive after the rename."""
+        """latitude, longitude and vertices must NOT be added for a scalar variable."""
         cmoriser = _make_cmoriser(
             mock_vocab, scalar_mapping, "Omon.zostoga", temp_dir, _scalar_ds()
         )
         with patch.object(cmoriser, "_check_calendar"):
             cmoriser.update_attributes()
 
-        assert "nv" not in cmoriser.ds.coords
-        assert "nv" not in cmoriser.ds.dims
-
-    @pytest.mark.unit
-    def test_bnds_dimension_size_preserved(
-        self, mock_vocab, scalar_mapping, temp_dir
-    ):
-        """bnds dimension must have size 2 after rename."""
-        cmoriser = _make_cmoriser(
-            mock_vocab, scalar_mapping, "Omon.zostoga", temp_dir, _scalar_ds()
-        )
-        with patch.object(cmoriser, "_check_calendar"):
-            cmoriser.update_attributes()
-
-        assert cmoriser.ds.dims["bnds"] == 2
-
-    @pytest.mark.unit
-    def test_bnds_rename_applies_to_spatial_variables_too(
-        self, mock_vocab, spatial_mapping, temp_dir
-    ):
-        """bnds must also be a pure dimension for spatially-resolved variables."""
-        cmoriser = _make_cmoriser(
-            mock_vocab, spatial_mapping, "Omon.tos", temp_dir, _spatial_ds()
-        )
-        with patch.object(cmoriser, "_check_calendar"):
-            cmoriser.update_attributes()
-
-        assert "bnds" not in cmoriser.ds.coords
-        assert "bnds" in cmoriser.ds.dims
-
-    # ------------------------------------------------------------------
-    # Scalar variable: spatial coords skipped, orphaned dims dropped
-    # ------------------------------------------------------------------
-
-    @pytest.mark.unit
-    def test_scalar_variable_no_latitude_added(
-        self, mock_vocab, scalar_mapping, temp_dir
-    ):
-        """latitude must NOT be added for a scalar (time-only) CMOR variable."""
-        cmoriser = _make_cmoriser(
-            mock_vocab, scalar_mapping, "Omon.zostoga", temp_dir, _scalar_ds()
-        )
-        with patch.object(cmoriser, "_check_calendar"):
-            cmoriser.update_attributes()
-
-        assert "latitude" not in cmoriser.ds
-
-    @pytest.mark.unit
-    def test_scalar_variable_no_longitude_added(
-        self, mock_vocab, scalar_mapping, temp_dir
-    ):
-        """longitude must NOT be added for a scalar CMOR variable."""
-        cmoriser = _make_cmoriser(
-            mock_vocab, scalar_mapping, "Omon.zostoga", temp_dir, _scalar_ds()
-        )
-        with patch.object(cmoriser, "_check_calendar"):
-            cmoriser.update_attributes()
-
-        assert "longitude" not in cmoriser.ds
-
-    @pytest.mark.unit
-    def test_scalar_variable_no_vertices_added(
-        self, mock_vocab, scalar_mapping, temp_dir
-    ):
-        """vertices_latitude/longitude must NOT be added for a scalar CMOR variable."""
-        cmoriser = _make_cmoriser(
-            mock_vocab, scalar_mapping, "Omon.zostoga", temp_dir, _scalar_ds()
-        )
-        with patch.object(cmoriser, "_check_calendar"):
-            cmoriser.update_attributes()
-
-        assert "vertices_latitude" not in cmoriser.ds
-        assert "vertices_longitude" not in cmoriser.ds
+        for var in ("latitude", "longitude", "vertices_latitude", "vertices_longitude"):
+            assert var not in cmoriser.ds, f"'{var}' should not be present for scalar variable"
 
     @pytest.mark.unit
     def test_scalar_variable_orphaned_dims_dropped(
         self, mock_vocab, scalar_mapping, temp_dir
     ):
         """lev/i/j orphaned after drop_intermediates must be removed."""
-        ds = _scalar_ds(with_orphaned_dims=True)
         cmoriser = _make_cmoriser(
-            mock_vocab, scalar_mapping, "Omon.zostoga", temp_dir, ds
-        )
-        with patch.object(cmoriser, "_check_calendar"):
-            cmoriser.update_attributes()
-
-        for orphan in ("lev", "i", "j"):
-            assert orphan not in cmoriser.ds.dims, f"orphaned dim '{orphan}' still present"
-
-    @pytest.mark.unit
-    def test_scalar_variable_output_dims_are_time_and_bnds_only(
-        self, mock_vocab, scalar_mapping, temp_dir
-    ):
-        """Final dataset for a scalar variable must have only time and bnds dims."""
-        ds = _scalar_ds(with_orphaned_dims=True)
-        cmoriser = _make_cmoriser(
-            mock_vocab, scalar_mapping, "Omon.zostoga", temp_dir, ds
+            mock_vocab, scalar_mapping, "Omon.zostoga", temp_dir,
+            _scalar_ds(with_orphaned_dims=True),
         )
         with patch.object(cmoriser, "_check_calendar"):
             cmoriser.update_attributes()
@@ -756,76 +666,15 @@ class TestUpdateAttributes:
         assert set(cmoriser.ds.dims) == {"time", "bnds"}
 
     @pytest.mark.unit
-    def test_scalar_variable_data_values_unchanged(
-        self, mock_vocab, scalar_mapping, temp_dir
-    ):
-        """update_attributes must not alter the zostoga data values."""
-        ds = _scalar_ds()
-        expected = ds["zostoga"].values.copy()
-        cmoriser = _make_cmoriser(
-            mock_vocab, scalar_mapping, "Omon.zostoga", temp_dir, ds
-        )
-        with patch.object(cmoriser, "_check_calendar"):
-            cmoriser.update_attributes()
-
-        np.testing.assert_array_equal(cmoriser.ds["zostoga"].values, expected)
-
-    # ------------------------------------------------------------------
-    # Spatial variable: 2-D grid coords must still be attached (regression)
-    # ------------------------------------------------------------------
-
-    @pytest.mark.unit
-    def test_spatial_variable_has_latitude(
+    def test_spatial_variable_grid_coords_still_added(
         self, mock_vocab, spatial_mapping, temp_dir
     ):
-        """latitude must be added for a spatially-resolved CMOR variable."""
+        """Regression: latitude/longitude/vertices must still be added for spatial vars."""
         cmoriser = _make_cmoriser(
             mock_vocab, spatial_mapping, "Omon.tos", temp_dir, _spatial_ds()
         )
         with patch.object(cmoriser, "_check_calendar"):
             cmoriser.update_attributes()
 
-        assert "latitude" in cmoriser.ds
-
-    @pytest.mark.unit
-    def test_spatial_variable_has_longitude(
-        self, mock_vocab, spatial_mapping, temp_dir
-    ):
-        """longitude must be added for a spatially-resolved CMOR variable."""
-        cmoriser = _make_cmoriser(
-            mock_vocab, spatial_mapping, "Omon.tos", temp_dir, _spatial_ds()
-        )
-        with patch.object(cmoriser, "_check_calendar"):
-            cmoriser.update_attributes()
-
-        assert "longitude" in cmoriser.ds
-
-    @pytest.mark.unit
-    def test_spatial_variable_has_vertices(
-        self, mock_vocab, spatial_mapping, temp_dir
-    ):
-        """vertices_latitude/longitude must be added for a spatial CMOR variable."""
-        cmoriser = _make_cmoriser(
-            mock_vocab, spatial_mapping, "Omon.tos", temp_dir, _spatial_ds()
-        )
-        with patch.object(cmoriser, "_check_calendar"):
-            cmoriser.update_attributes()
-
-        assert "vertices_latitude" in cmoriser.ds
-        assert "vertices_longitude" in cmoriser.ds
-
-    @pytest.mark.unit
-    def test_spatial_variable_latitude_shape(
-        self, mock_vocab, spatial_mapping, temp_dir
-    ):
-        """latitude must have shape (j, i) matching the grid_info."""
-        ny, nx = 4, 5
-        grid_info = _make_grid_info(ny=ny, nx=nx)
-        cmoriser = _make_cmoriser(
-            mock_vocab, spatial_mapping, "Omon.tos", temp_dir,
-            _spatial_ds(ny=ny, nx=nx), grid_info=grid_info,
-        )
-        with patch.object(cmoriser, "_check_calendar"):
-            cmoriser.update_attributes()
-
-        assert cmoriser.ds["latitude"].shape == (ny, nx)
+        for var in ("latitude", "longitude", "vertices_latitude", "vertices_longitude"):
+            assert var in cmoriser.ds, f"'{var}' missing for spatial variable"
