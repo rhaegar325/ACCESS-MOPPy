@@ -242,10 +242,11 @@ class Ocean_CMORiser(CMORiser):
         }
 
         if "nv" in self.ds.dims:
-            self.ds = self.ds.rename_dims({"nv": "bnds"}).rename_vars({"nv": "bnds"})
-            self.ds["bnds"].attrs.update(
-                {"long_name": "vertex number of the bounds", "units": "1"}
-            )
+            self.ds = self.ds.rename_dims({"nv": "bnds"})
+            # Drop the nv coordinate variable so bnds remains a pure dimension
+            # with no index values, as required by CMIP6.
+            if "nv" in self.ds.coords:
+                self.ds = self.ds.drop_vars("nv")
 
         cmor_attrs = self.vocab.variable
         self.ds[self.cmor_name].attrs.update(
