@@ -58,6 +58,7 @@ from access_moppy.derivations.calc_utils import (
     calculate_monthly_minimum,
     drop_axis,
     drop_time_axis,
+    load_ressource_data,
     squeeze_axis,
 )
 
@@ -86,6 +87,7 @@ custom_functions = {
     "drop_axis": drop_axis,
     "drop_time_axis": drop_time_axis,
     "squeeze_axis": squeeze_axis,
+    "load_ressource_data": load_ressource_data,
     "weighted_tile_sum": weighted_tile_sum,
     "calc_cland_with_wood_products": calc_cland_with_wood_products,
     "calc_carbon_pool_kg_m2": calc_carbon_pool_kg_m2,
