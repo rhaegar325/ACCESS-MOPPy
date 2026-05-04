@@ -741,10 +741,10 @@ def test_get_nominal_resolution_single_realm_missing_key(
 
 
 @pytest.mark.unit
-def test_get_nominal_resolution_multiple_realms_no_target_raises(
+def test_get_nominal_resolution_multiple_realms_no_target_warns(
     mock_vocab_data, mock_table_data
 ):
-    """Multiple modeling realms without target_realm raises ValueError."""
+    """Multiple modeling realms without target_realm warns and defaults to first realm."""
     vocab = _make_cmip6_vocab(
         mock_vocab_data,
         mock_table_data,
@@ -754,8 +754,9 @@ def test_get_nominal_resolution_multiple_realms_no_target_raises(
             "ocean": {"native_nominal_resolution": "50 km"},
         },
     )
-    with pytest.raises(ValueError, match="multiple modeling realms"):
-        vocab._get_nominal_resolution()
+    with pytest.warns(UserWarning, match="multiple modeling realms"):
+        result = vocab._get_nominal_resolution()
+    assert result == "100 km"
 
 
 @pytest.mark.unit
